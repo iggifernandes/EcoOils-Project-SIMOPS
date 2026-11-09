@@ -1,4 +1,4 @@
-// VERSION: 3.0.0 - SIMOPS Meeting Record backend (public record, email-OTP signatures, tamper-evident seal, map coordinates)
+// VERSION: 4.0.0 - SIMOPS Meeting Record backend (single sign-in with per-party PIN set by email code, public record, email-OTP signatures, tamper-evident seal, map)
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > put the HSSE host email(s) in HOST_EMAILS below >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -59,6 +59,7 @@ function contentHash_(m) { return sha_(JSON.stringify(content_(m))); }
 function sigHash_(who, s, H) { return sha_([who, s.name, s.emailFull, s.at, H, sha_(s.sign)].join('|')); }
 function required_(m) { return m.parts.concat(['ack', 'noted']); }
 function emailOf_(m, who) {
+  const reg = roleEmails_()[who]; if (reg) return reg;
   if (who === 'ack') return m.ackEmail; if (who === 'noted') return m.notedEmail;
   return m.con[who] && m.con[who].email;
 }
@@ -81,6 +82,17 @@ function otpCheck_(key, code) {
 }
 function sess_(s) { return s ? CacheService.getScriptCache().get('sess:' + s) : null; }
 
+// ---------- party sign-in (PIN set only through an emailed code; PINs are stored as salted hashes, never in the sheet) ----------
+function props_() { return PropertiesService.getScriptProperties(); }
+function roleEmails_() { try { return JSON.parse(props_().getProperty('roleEmails') || '{}'); } catch (e) { return {}; } }
+function pinHash_(role, pin) {
+  let salt = props_().getProperty('salt:' + role);
+  if (!salt) { salt = rnd_(16); props_().setProperty('salt:' + role, salt); }
+  return sha_(salt + ':' + role + ':' + pin);
+}
+function csess_(s) { return s ? CacheService.getScriptCache().get('csess:' + s) : null; }
+function roleAuth_(m, b) { return !!(b.c && ((m.tok[b.c] && m.tok[b.c] === b.t) || (b.s && csess_(b.s) === b.c))); }
+
 // ---------- storage ----------
 function save_(m) {
   m.updated = new Date().toISOString();
@@ -95,7 +107,7 @@ function save_(m) {
 }
 function view_(m, p) {
   const host = !!(p.ht && p.ht === m.ht);
-  const who = (p.c && m.tok[p.c] && m.tok[p.c] === p.t) ? p.c : null;
+  const who = (p.c && ((m.tok[p.c] && m.tok[p.c] === p.t) || (p.s && csess_(p.s) === p.c))) ? p.c : null;
   const c = JSON.parse(JSON.stringify(m));
   delete c.ht; delete c.tok; delete c.owner;
   if (!host) {
@@ -137,7 +149,7 @@ function doGet(e) {
     const items = rows.filter(function (r) { return r[4] !== 'open'; }).reverse().slice(0, 60).map(function (r) { return { id: r[0], date: r[1], time: r[2], host: r[3], status: r[4], parties: r[5], clashes: r[6] }; });
     return out_({ ok: true, items: items });
   }
-  return out_({ ok: true, version: '3.0.0' });
+  return out_({ ok: true, version: '4.0.0' });
 }
 
 function doPost(e) {
@@ -163,6 +175,80 @@ function handle_(b) {
     CacheService.getScriptCache().put('sess:' + s, em, 21600);
     return { ok: true, session: s, email: em };
   }
+  // ----- party sign-in: one link/QR, party picks its name and enters its PIN -----
+  if (b.action === 'pinOtp') {
+    if (ROLES.indexOf(b.role) < 0) return { ok: false, error: 'unknown party' };
+    let e = roleEmails_()[b.role];
+    if (!e) {  // first time: the party registers its own email (locked after the first PIN is set; host can reset)
+      e = String(b.email || '').trim();
+      if (!okEmail_(e)) return { ok: false, error: 'enter your email address' };
+      props_().setProperty('pending:' + b.role, e);
+    }
+    otpSend_('pin:' + b.role, e, 'setting your SIMOPS PIN');
+    return { ok: true, to: mask_(e) };
+  }
+  if (b.action === 'pinSet') {
+    if (ROLES.indexOf(b.role) < 0 || !/^\d{4,8}$/.test(String(b.pin))) return { ok: false, error: 'PIN must be 4 to 8 digits' };
+    if (!otpCheck_('pin:' + b.role, b.code)) return { ok: false, error: 'wrong or expired code' };
+    const pend = props_().getProperty('pending:' + b.role);
+    if (!roleEmails_()[b.role] && pend) {
+      const em = roleEmails_(); em[b.role] = pend;
+      props_().setProperty('roleEmails', JSON.stringify(em)); props_().deleteProperty('pending:' + b.role);
+    }
+    props_().setProperty('pin:' + b.role, pinHash_(b.role, String(b.pin)));
+    CacheService.getScriptCache().remove('lock:' + b.role);
+    return { ok: true };
+  }
+  if (b.action === 'roleLogin') {
+    if (ROLES.indexOf(b.role) < 0) return { ok: false, error: 'unknown party' };
+    const cache = CacheService.getScriptCache(), lk = 'lock:' + b.role;
+    const tries = parseInt(cache.get(lk) || '0', 10);
+    if (tries >= 5) return { ok: false, error: 'too many attempts: wait 10 minutes, or reset the PIN by email' };
+    const stored = props_().getProperty('pin:' + b.role);
+    if (!stored) return { ok: false, error: 'no PIN set yet: use Set or forgot PIN' };
+    if (pinHash_(b.role, String(b.pin)) !== stored) { cache.put(lk, String(tries + 1), 600); return { ok: false, error: 'wrong PIN' }; }
+    cache.remove(lk);
+    const sid = Utilities.getUuid();
+    cache.put('csess:' + sid, b.role, 21600);
+    return { ok: true, session: sid, role: b.role };
+  }
+  if (b.action === 'myMeetings') {
+    const role = csess_(b.s);
+    if (!role) return { ok: false, error: 'session' };
+    const sh = sheet_(), last = sh.getLastRow();
+    const rows = last > 1 ? sh.getRange(2, 1, last - 1, 5).getValues().reverse() : [];
+    const mk = function (r) { return { id: r[0], date: r[1], time: r[2], status: r[4] }; };
+    const items = rows.filter(function (r) { return r[4] !== 'done'; }).slice(0, 20).map(mk)
+      .concat(rows.filter(function (r) { return r[4] === 'done'; }).slice(0, 5).map(mk));
+    return { ok: true, role: role, items: items };
+  }
+  // ----- host registry: party emails and PIN reset -----
+  if (b.action === 'regGet') {
+    if (!sess_(b.session)) return { ok: false, error: 'session' };
+    const em = roleEmails_(), reg = {};
+    ROLES.forEach(function (r) { reg[r] = { email: em[r] || '', pinSet: !!props_().getProperty('pin:' + r) }; });
+    return { ok: true, reg: reg };
+  }
+  if (b.action === 'regSet') {
+    if (!sess_(b.session)) return { ok: false, error: 'session' };
+    const clean = {};
+    for (let i = 0; i < ROLES.length; i++) {
+      const v = String((b.emails || {})[ROLES[i]] || '').trim();
+      if (v && !okEmail_(v)) return { ok: false, error: 'invalid email for ' + NAMES[ROLES[i]] };
+      if (v) clean[ROLES[i]] = v;
+    }
+    props_().setProperty('roleEmails', JSON.stringify(clean));
+    return { ok: true };
+  }
+  if (b.action === 'pinReset') {
+    if (!sess_(b.session)) return { ok: false, error: 'session' };
+    if (ROLES.indexOf(b.role) < 0) return { ok: false, error: 'unknown party' };
+    props_().deleteProperty('pin:' + b.role);
+    const em = roleEmails_(); delete em[b.role]; props_().setProperty('roleEmails', JSON.stringify(em));
+    CacheService.getScriptCache().remove('lock:' + b.role);
+    return { ok: true };
+  }
+
   if (b.action === 'create') {
     const owner = sess_(b.session);
     if (!owner) return { ok: false, error: 'session' };
@@ -186,6 +272,7 @@ function handle_(b) {
   const m = load_(b.id);
   if (!m) return { ok: false, error: 'not found' };
   const isHost = !!(b.ht && b.ht === m.ht);
+  if (b.action === 'get') return view_(m, b);
 
   if (b.action === 'meta') {
     if (!isHost) return { ok: false, error: 'host only' };
@@ -194,10 +281,11 @@ function handle_(b) {
     save_(m); return { ok: true };
   }
   if (b.action === 'entry') {
-    if (!(m.tok[b.c] && m.tok[b.c] === b.t && CODES.indexOf(b.c) >= 0)) return { ok: false, error: 'invalid link' };
+    if (!(CODES.indexOf(b.c) >= 0 && roleAuth_(m, b))) return { ok: false, error: 'invalid sign-in' };
     if (m.status !== 'open') return { ok: false, error: 'entries are locked' };
-    if (!okEmail_(b.email)) return { ok: false, error: 'a valid email is required (used to verify your signature)' };
-    m.con[b.c] = { name: b.name || '', email: String(b.email).trim(), rows: b.rows || [], updated: new Date().toISOString() };
+    const em = roleEmails_()[b.c] || String(b.email || '').trim();
+    if (!okEmail_(em)) return { ok: false, error: 'a valid email is required (used to verify your signature)' };
+    m.con[b.c] = { name: b.name || '', email: em, rows: b.rows || [], updated: new Date().toISOString() };
     save_(m); return { ok: true };
   }
   if (b.action === 'status') {
@@ -225,7 +313,7 @@ function handle_(b) {
   }
   if (b.action === 'otpSend') {
     const w = b.c;
-    if (!(m.tok[w] && m.tok[w] === b.t)) return { ok: false, error: 'invalid link' };
+    if (!roleAuth_(m, b)) return { ok: false, error: 'invalid sign-in' };
     if (m.status !== 'signing' || required_(m).indexOf(w) < 0) return { ok: false, error: 'not available' };
     if (m.sign[w]) return { ok: false, error: 'already signed' };
     const em = emailOf_(m, w);
@@ -234,7 +322,7 @@ function handle_(b) {
   }
   if (b.action === 'sign') {
     const w = b.who;
-    if (!(m.tok[w] && m.tok[w] === b.t && b.c === w)) return { ok: false, error: 'invalid link' };
+    if (!(b.c === w && roleAuth_(m, b))) return { ok: false, error: 'invalid sign-in' };
     if (m.status !== 'signing' || required_(m).indexOf(w) < 0) return { ok: false, error: 'not available' };
     if (m.sign[w]) return { ok: false, error: 'already signed' };
     if (!b.name || !b.sign) return { ok: false, error: 'name and signature required' };
