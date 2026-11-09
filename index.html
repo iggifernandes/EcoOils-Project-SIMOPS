@@ -61,7 +61,7 @@ canvas.pad{width:100%;height:90px;border:1px dashed var(--grey);border-radius:4p
 <header>
   <img class="logo" src="logo.png" alt="EcoOils Mentari" style="height:48px;width:auto;display:block">
   <h1 data-t="title">SIMOPS Meeting Record</h1>
-  <div class="rt"><div class="ver">v4.1.0</div>
+  <div class="rt"><div class="ver">v4.2.0</div>
     <div class="lang"><button data-l="en">EN</button><button data-l="id">ID</button><button data-l="ms">MS</button></div></div>
 </header>
 <main id="app"></main>
@@ -69,7 +69,7 @@ canvas.pad{width:100%;height:90px;border:1px dashed var(--grey);border-radius:4p
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
-const VERSION='4.1.0';
+const VERSION='4.2.0';
 const API_URL='https://script.google.com/macros/s/AKfycbz9C-pbRRJ0Rf1EseelBe1IGp0FkydwoIZ0e1xoBgC_Wkxl7C7dkOhFh3c9v2EczQCMCA/exec';
 const CODES=['KKS','WEN','GSB','PBS','ECO'];
 const ROLES=[...CODES,'ack','noted'];
@@ -228,7 +228,10 @@ async function home(){
      <div class="card"><h2>${t('reg')}</h2><div id="regp" class="mut">…</div></div>
      <div class="card"><h2>${t('qrt')}</h2><div class="mut">${t('qrn')}</div><div id="qr" style="margin:10px 0"></div><div class="link">${BASE}</div><button class="btn sec" data-copy="${BASE}">${t('copy')}</button></div>`;
   }else{
-    h+=`<details class="card"><summary><b>${t('hostlog')}</b></summary><label style="margin-top:8px">${t('email')}</label><input id="l_em" type="email"><div id="l1"><button class="btn" id="l_send">${t('sendcode')}</button></div><div id="l2" style="display:none"><label>${t('code')}</label><input id="l_code" inputmode="numeric" maxlength="6"><button class="btn" id="l_go">${t('login')}</button></div></details>`;
+    h+=`<details class="card"><summary><b>${t('hostlog')}</b></summary><label style="margin-top:8px">${t('email')}</label><input id="l_em" type="email" value="${esc(ls('simopsHostEm'))}">
+     <label style="margin-top:8px">${t('cpin')}</label><input id="l_pin" type="password" inputmode="numeric" maxlength="8" autocomplete="current-password"><button class="btn" id="l_pgo">${t('clogin')}</button><div class="mut" style="margin-top:6px">${t('stay')}</div>
+     <details style="margin-top:10px"><summary>${t('cset')}</summary><div id="l1"><button class="btn sec" id="l_send">${t('sendcode')}</button></div>
+      <div id="l2" style="display:none"><label>${t('code')}</label><input id="l_code" inputmode="numeric" maxlength="6"><label style="margin-top:8px">${t('pinnew')}</label><input id="l_new" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password"><button class="btn" id="l_go">${t('pinset')}</button></div></details></details>`;
   }
   h+=`<div class="card"><h2>${t('register')}</h2><div id="reg" class="mut">…</div></div>`;
   $('#app').innerHTML=h;
@@ -256,8 +259,10 @@ async function home(){
       b.innerHTML=ROLES.map(c=>`<div class="lk"><b>${esc(RN(c))}</b> ${esc(r.reg[c].email||'—')} <span class="tag ${r.reg[c].pinSet?'ok':''}">${r.reg[c].pinSet?t('pinok2'):t('pinno')}</span> <button class="btn sec" data-rs="${c}">${t('pinreset')}</button></div>`).join('');
       b.querySelectorAll('[data-rs]').forEach(x=>x.onclick=async()=>{if(!confirm(t('pinreset')+'?'))return;const q2=await post({action:'pinReset',session:sess,role:x.dataset.rs});msg(q2.ok?t('saved'):(q2.error||t('err')));home()})});
   }else{
-    $('#l_send').onclick=async()=>{await post({action:'hostOtp',email:$('#l_em').value});$('#l1').style.display='none';$('#l2').style.display='block';msg(t('codesent')+' '+$('#l_em').value)};
-    $('#l_go').onclick=async()=>{const r=await post({action:'hostLogin',email:$('#l_em').value,code:$('#l_code').value});if(!r.ok)return msg(r.error||t('err'));localStorage.simopsSess=r.session;localStorage.simopsEmail=r.email;home()};
+    const lem=()=>{try{localStorage.simopsHostEm=$('#l_em').value.trim()}catch(e){}return $('#l_em').value.trim()};
+    $('#l_pgo').onclick=async()=>{const r=await post({action:'hostPinLogin',email:lem(),pin:$('#l_pin').value});if(!r.ok)return msg(r.error||t('err'));localStorage.simopsSess=r.session;localStorage.simopsEmail=r.email;home()};
+    $('#l_send').onclick=async()=>{await post({action:'hostPinOtp',email:lem()});$('#l1').style.display='none';$('#l2').style.display='block';msg(t('codesent')+' '+lem())};
+    $('#l_go').onclick=async()=>{const r=await post({action:'hostPinSet',email:lem(),code:$('#l_code').value,pin:$('#l_new').value});if(!r.ok)return msg(r.error||t('err'));msg(t('pinok'));$('#l1').style.display='block';$('#l2').style.display='none'};
   }
   get({action:'list'}).then(r=>{const b=$('#reg');if(!r.ok||!r.items.length){b.textContent=t('noreg');return}
     b.innerHTML=r.items.map(x=>`<div class="lk"><a href="${BASE}?m=${x.id}">${esc(String(x.date).slice(0,10))} ${esc(x.time||'')}</a> <span class="tag ${x.status==='done'?'ok':''}">${t('s_'+x.status)}</span><div class="mut">${esc(x.parties||'')}</div></div>`).join('')});

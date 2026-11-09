@@ -1,4 +1,4 @@
-// VERSION: 4.1.0 - SIMOPS Meeting Record backend (single sign-in with per-party PIN set by email code, public record, email-OTP signatures, tamper-evident seal, map)
+// VERSION: 4.2.0 - SIMOPS Meeting Record backend (single sign-in with per-party PIN set by email code, public record, email-OTP signatures, tamper-evident seal, map)
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > put the HSSE host email(s) in HOST_EMAILS below >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -168,7 +168,7 @@ function doGet(e) {
     const items = rows.filter(function (r) { return r[4] !== 'open'; }).reverse().slice(0, 60).map(function (r) { return { id: r[0], date: r[1], time: r[2], host: r[3], status: r[4], parties: r[5], clashes: r[6] }; });
     return out_({ ok: true, items: items });
   }
-  return out_({ ok: true, version: '4.1.0' });
+  return out_({ ok: true, version: '4.2.0' });
 }
 
 function doPost(e) {
@@ -193,6 +193,31 @@ function handle_(b) {
     const s = Utilities.getUuid();
     lsPut_('h', s, em);
     return { ok: true, session: s, email: em };
+  }
+  // ----- host (admin) PIN sign-in: PIN is set only through an emailed code -----
+  if (b.action === 'hostPinOtp') {
+    const em = String(b.email || '').trim().toLowerCase();
+    if (HOST_EMAILS.map(function (x) { return x.toLowerCase(); }).indexOf(em) >= 0) otpSend_('hpin:' + em, em, 'setting your SIMOPS host PIN');
+    return { ok: true };
+  }
+  if (b.action === 'hostPinSet') {
+    const em = String(b.email || '').trim().toLowerCase();
+    if (!/^\d{4,8}$/.test(String(b.pin))) return { ok: false, error: 'PIN must be 4 to 8 digits' };
+    if (HOST_EMAILS.map(function (x) { return x.toLowerCase(); }).indexOf(em) < 0 || !otpCheck_('hpin:' + em, b.code)) return { ok: false, error: 'wrong or expired code' };
+    props_().setProperty('hpin:' + em, pinHash_('host:' + em, String(b.pin)));
+    CacheService.getScriptCache().remove('lock:host:' + em);
+    return { ok: true };
+  }
+  if (b.action === 'hostPinLogin') {
+    const em = String(b.email || '').trim().toLowerCase(), cache = CacheService.getScriptCache(), lk = 'lock:host:' + em;
+    const tries = parseInt(cache.get(lk) || '0', 10);
+    if (tries >= 5) return { ok: false, error: 'too many attempts: wait 10 minutes, or reset the PIN by email' };
+    const stored = props_().getProperty('hpin:' + em);
+    if (!stored) return { ok: false, error: 'no PIN set yet: use Set or forgot PIN' };
+    if (pinHash_('host:' + em, String(b.pin)) !== stored) { cache.put(lk, String(tries + 1), 600); return { ok: false, error: 'wrong PIN' }; }
+    cache.remove(lk);
+    const sid = Utilities.getUuid(); lsPut_('h', sid, em);
+    return { ok: true, session: sid, email: em };
   }
   // ----- party sign-in: one link/QR, party picks its name and enters its PIN -----
   if (b.action === 'pinOtp') {
