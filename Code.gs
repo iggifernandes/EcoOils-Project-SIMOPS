@@ -1,4 +1,4 @@
-// VERSION: 4.0.0 - SIMOPS Meeting Record backend (single sign-in with per-party PIN set by email code, public record, email-OTP signatures, tamper-evident seal, map)
+// VERSION: 4.0.1 - SIMOPS Meeting Record backend (single sign-in with per-party PIN set by email code, public record, email-OTP signatures, tamper-evident seal, map)
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > put the HSSE host email(s) in HOST_EMAILS below >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -136,7 +136,7 @@ function verify_(id) {
 }
 
 function doGet(e) {
-  const p = e.parameter || {};
+  const p = (e && e.parameter) || {};
   if (p.action === 'get') {
     const m = load_(p.id);
     if (!m) return out_({ ok: false, error: 'not found' });
@@ -149,7 +149,7 @@ function doGet(e) {
     const items = rows.filter(function (r) { return r[4] !== 'open'; }).reverse().slice(0, 60).map(function (r) { return { id: r[0], date: r[1], time: r[2], host: r[3], status: r[4], parties: r[5], clashes: r[6] }; });
     return out_({ ok: true, items: items });
   }
-  return out_({ ok: true, version: '4.0.0' });
+  return out_({ ok: true, version: '4.0.1' });
 }
 
 function doPost(e) {
