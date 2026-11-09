@@ -1,4 +1,4 @@
-// VERSION: 4.5.0 - SIMOPS Meeting Record backend (single sign-in with per-party PIN set by email code, public record, email-OTP signatures, tamper-evident seal, map)
+// VERSION: 4.6.0 - SIMOPS Meeting Record backend (single sign-in with per-party PIN set by email code, public record, email-OTP signatures, tamper-evident seal, map)
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > put the HSSE host email(s) in HOST_EMAILS below >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -40,6 +40,28 @@ function clashList_(m) {
 }
 
 // ---------- tamper-evident seal ----------
+// ---------- meetings ----------
+function newMeeting_(f) {
+  const m = {
+    id: rnd_(8), ht: rnd_(16), tok: {}, owner: f.owner, base: f.base,
+    host: f.host, date: f.date, time: f.time, hostEmails: f.hostEmails, ackEmail: f.ackEmail || '', notedEmail: f.notedEmail || '', areas: f.areas || [],
+    status: 'open', con: {}, parts: [], sign: {}, photos: [], hostc: '', created: new Date().toISOString()
+  };
+  ROLES.forEach(function (r) { m.tok[r] = rnd_(16); });
+  save_(m);
+  return m;
+}
+// as soon as a SIMOPS is fully signed, the next day's meeting opens by itself so contractors can start entering their plans
+function openNext_(m) {
+  if (m.next) return load_(m.next);
+  let d = new Date(String(m.date).slice(0, 10) + 'T00:00:00+07:00');
+  if (isNaN(d.getTime())) d = new Date();
+  const nd = Utilities.formatDate(new Date(d.getTime() + 86400000), 'Asia/Jakarta', 'yyyy-MM-dd');
+  const n = newMeeting_({ owner: m.owner, base: m.base, host: m.host, date: nd, time: m.time, hostEmails: m.hostEmails, ackEmail: m.ackEmail, notedEmail: m.notedEmail, areas: m.areas });
+  m.next = n.id;
+  return n;
+}
+
 function content_(m) {
   const con = {};
   CODES.forEach(function (c) {
@@ -161,7 +183,7 @@ function doGet(e) {
     const items = rows.filter(function (r) { return r[4] !== 'open'; }).reverse().slice(0, 60).map(function (r) { return { id: r[0], date: r[1], time: r[2], host: r[3], status: r[4], parties: r[5], clashes: r[6] }; });
     return out_({ ok: true, items: items });
   }
-  return out_({ ok: true, version: '4.5.0' });
+  return out_({ ok: true, version: '4.6.0' });
 }
 
 function doPost(e) {
@@ -289,13 +311,7 @@ function handle_(b) {
   if (b.action === 'create') {
     const owner = sess_(b.session);
     if (!owner) return { ok: false, error: 'session' };
-    const m = {
-      id: rnd_(8), ht: rnd_(16), tok: {}, owner: owner, base: b.base,
-      host: b.host, date: b.date, time: b.time, hostEmails: b.hostEmails || owner, ackEmail: '', notedEmail: '', areas: b.areas || [],
-      status: 'open', con: {}, parts: [], sign: {}, photos: [], hostc: '', created: new Date().toISOString()
-    };
-    ROLES.forEach(function (r) { m.tok[r] = rnd_(16); });
-    save_(m);
+    const m = newMeeting_({ owner: owner, base: b.base, host: b.host, date: b.date, time: b.time, hostEmails: b.hostEmails || owner, ackEmail: '', notedEmail: '', areas: b.areas || [] });
     return { ok: true, id: m.id, ht: m.ht };
   }
   if (b.action === 'mine') {
@@ -402,6 +418,7 @@ function handle_(b) {
       m.sealedAt = new Date().toISOString();
       m.status = 'done';
       m.pdf = makePdf_(m).getUrl();
+      openNext_(m);
       save_(m); sendPdf_(m);
     } else save_(m);
     return { ok: true };
@@ -451,7 +468,7 @@ function sendPdf_(m) {
   if (!to) return;
   MailApp.sendEmail({
     to: to, subject: 'SIMOPS Meeting Record - ' + m.date + ' ' + (m.time || ''),
-    body: 'All parties have signed. The SIMOPS Meeting Record is attached.\n\nHost: ' + m.host + '\nRecord: ' + m.base + '?m=' + m.id + '\nVerify authenticity: ' + m.base + '?v=' + m.id,
+    body: 'All parties have signed. The SIMOPS Meeting Record is attached.\n\nHost: ' + m.host + '\nRecord: ' + m.base + '?m=' + m.id + '\nVerify authenticity: ' + m.base + '?v=' + m.id + (m.next ? '\n\nThe next SIMOPS is now open for entries. Sign in at ' + m.base + ' and add your plans for the next day.' : ''),
     attachments: [pdfBlob_(m)]
   });
 }
