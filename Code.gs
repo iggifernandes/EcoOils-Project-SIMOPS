@@ -1,4 +1,4 @@
-// VERSION: 4.6.0 - SIMOPS Meeting Record backend (single sign-in with per-party PIN set by email code, public record, email-OTP signatures, tamper-evident seal, map)
+// VERSION: 4.7.0 - SIMOPS Meeting Record backend (single sign-in with per-party PIN set by email code, public record, email-OTP signatures, tamper-evident seal, map)
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > put the HSSE host email(s) in HOST_EMAILS below >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -183,7 +183,7 @@ function doGet(e) {
     const items = rows.filter(function (r) { return r[4] !== 'open'; }).reverse().slice(0, 60).map(function (r) { return { id: r[0], date: r[1], time: r[2], host: r[3], status: r[4], parties: r[5], clashes: r[6] }; });
     return out_({ ok: true, items: items });
   }
-  return out_({ ok: true, version: '4.6.0' });
+  return out_({ ok: true, version: '4.7.0' });
 }
 
 function doPost(e) {
@@ -382,6 +382,7 @@ function handle_(b) {
       if (!m.parts.length) return { ok: false, error: 'no entries yet' };
     }
     if (b.to === 'signing') {
+      if (!(m.photos || []).length) return { ok: false, error: 'a meeting photo is required before signing' };
       const miss = required_(m).filter(function (r) { return !okEmail_(emailOf_(m, r)); });
       if (miss.length) return { ok: false, error: 'email missing for: ' + miss.map(function (r) { return NAMES[r]; }).join(', ') };
       m.H = contentHash_(m); m.frozenAt = new Date().toISOString();
@@ -389,7 +390,7 @@ function handle_(b) {
     m.status = b.to; save_(m); return { ok: true };
   }
   if (b.action === 'photo') {
-    if (!isHost) return { ok: false, error: 'host only' };
+    if (!(isHost || roleAuth_(m, b))) return { ok: false, error: 'invalid sign-in' };
     if (m.status !== 'discussion') return { ok: false, error: 'photo can be added during discussion only' };
     if (m.photos.length >= 4) return { ok: false, error: 'max 4 photos' };
     m.photos.push(b.data); save_(m); return { ok: true };
