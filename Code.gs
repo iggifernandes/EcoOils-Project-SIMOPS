@@ -1,4 +1,4 @@
-// VERSION: 4.7.0 - SIMOPS Meeting Record backend (single sign-in with per-party PIN set by email code, public record, email-OTP signatures, tamper-evident seal, map)
+// VERSION: 4.8.0 - SIMOPS Meeting Record backend (single sign-in with per-party PIN set by email code, public record, email-OTP signatures, tamper-evident seal, map)
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > put the HSSE host email(s) in HOST_EMAILS below >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -6,9 +6,9 @@
 const HOST_EMAILS = ['replace-with-host-email@example.com']; // people allowed to create meetings
 const SHEET_NAME = 'SIMOPS';
 const FOLDER_NAME = 'SIMOPS Records';
-const CODES = ['KKS', 'WEN', 'GSB', 'PBS', 'ECO'];
-const ROLES = ['KKS', 'WEN', 'GSB', 'PBS', 'ECO', 'ack', 'noted'];
-const NAMES = { KKS: 'KKS', WEN: 'WEN', GSB: 'GSB', PBS: 'PBS', ECO: 'EcoOils', ack: 'Acknowledged (EcoOils Construction Representative)', noted: 'Noted (EcoOils HSSE)' };
+const CODES = ['KKS', 'WEN', 'GSB', 'PBS', 'ECO', 'OT1', 'OT2'];
+const ROLES = ['KKS', 'WEN', 'GSB', 'PBS', 'ECO', 'OT1', 'OT2', 'ack', 'noted'];
+const NAMES = { KKS: 'KKS', WEN: 'WEN', GSB: 'GSB', PBS: 'PBS', ECO: 'EcoOils', OT1: 'Other contractor 1', OT2: 'Other contractor 2', ack: 'Acknowledged (EcoOils Construction Representative)', noted: 'Noted (EcoOils HSSE)' };
 
 function out_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
 function folder_() { const it = DriveApp.getFoldersByName(FOLDER_NAME); return it.hasNext() ? it.next() : DriveApp.createFolder(FOLDER_NAME); }
@@ -183,7 +183,7 @@ function doGet(e) {
     const items = rows.filter(function (r) { return r[4] !== 'open'; }).reverse().slice(0, 60).map(function (r) { return { id: r[0], date: r[1], time: r[2], host: r[3], status: r[4], parties: r[5], clashes: r[6] }; });
     return out_({ ok: true, items: items });
   }
-  return out_({ ok: true, version: '4.7.0' });
+  return out_({ ok: true, version: '4.8.0' });
 }
 
 function doPost(e) {
