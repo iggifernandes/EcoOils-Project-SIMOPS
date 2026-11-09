@@ -1,4 +1,4 @@
-// VERSION: 4.8.0 - SIMOPS Meeting Record backend (single sign-in with per-party PIN set by email code, public record, email-OTP signatures, tamper-evident seal, map)
+// VERSION: 4.8.1 - SIMOPS Meeting Record backend (single sign-in with per-party PIN set by email code, public record, email-OTP signatures, tamper-evident seal, map)
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > put the HSSE host email(s) in HOST_EMAILS below >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -183,7 +183,7 @@ function doGet(e) {
     const items = rows.filter(function (r) { return r[4] !== 'open'; }).reverse().slice(0, 60).map(function (r) { return { id: r[0], date: r[1], time: r[2], host: r[3], status: r[4], parties: r[5], clashes: r[6] }; });
     return out_({ ok: true, items: items });
   }
-  return out_({ ok: true, version: '4.8.0' });
+  return out_({ ok: true, version: '4.8.1' });
 }
 
 function doPost(e) {
@@ -349,8 +349,8 @@ function handle_(b) {
         headers: { 'x-goog-api-key': key },
         payload: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, maxOutputTokens: 300 } })
       });
-    } catch (err) { return { ok: false, error: 'AI service not reachable' }; }
-    if (res.getResponseCode() !== 200) return { ok: false, error: 'AI service busy, try again later' };
+    } catch (err) { return { ok: false, error: 'AI service not reachable: ' + String(err && err.message || err).slice(0, 160) }; }
+    if (res.getResponseCode() !== 200) return { ok: false, error: 'AI service error ' + res.getResponseCode() + ': ' + String(res.getContentText()).slice(0, 160) };
     let out = '';
     try { out = JSON.parse(res.getContentText()).candidates[0].content.parts[0].text; } catch (err) { return { ok: false, error: 'AI gave no answer' }; }
     out = String(out || '').trim().replace(/^["\s]+|["\s]+$/g, '').slice(0, 800);
@@ -472,4 +472,14 @@ function sendPdf_(m) {
     body: 'All parties have signed. The SIMOPS Meeting Record is attached.\n\nHost: ' + m.host + '\nRecord: ' + m.base + '?m=' + m.id + '\nVerify authenticity: ' + m.base + '?v=' + m.id + (m.next ? '\n\nThe next SIMOPS is now open for entries. Sign in at ' + m.base + ' and add your plans for the next day.' : ''),
     attachments: [pdfBlob_(m)]
   });
+}
+
+// Run this ONCE from the Apps Script editor (select authorizeAll, click Run, Review permissions, Allow).
+// It grants the web app permission to send email, use Drive and call the free Gemini AI service.
+function authorizeAll() {
+  UrlFetchApp.fetch('https://generativelanguage.googleapis.com/', { muteHttpExceptions: true });
+  DriveApp.getRootFolder();
+  MailApp.getRemainingDailyQuota();
+  SpreadsheetApp.getActive();
+  Logger.log('Authorized. Now deploy a New version of the web app.');
 }
