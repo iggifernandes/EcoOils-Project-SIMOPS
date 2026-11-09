@@ -1,4 +1,4 @@
-// VERSION: 4.0.1 - SIMOPS Meeting Record backend (single sign-in with per-party PIN set by email code, public record, email-OTP signatures, tamper-evident seal, map)
+// VERSION: 4.1.0 - SIMOPS Meeting Record backend (single sign-in with per-party PIN set by email code, public record, email-OTP signatures, tamper-evident seal, map)
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > put the HSSE host email(s) in HOST_EMAILS below >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -80,7 +80,26 @@ function otpCheck_(key, code) {
   if (c && String(code).trim() === c) { cache.remove('otp:' + key); return true; }
   return false;
 }
-function sess_(s) { return s ? CacheService.getScriptCache().get('sess:' + s) : null; }
+// ---------- long-lived sign-ins (30 days, kept in Script Properties so they survive the 6-hour cache limit) ----------
+const SESSION_DAYS = 30;
+function lsPut_(kind, id, val) {
+  const P = props_(), now = Date.now(), all = P.getProperties();
+  Object.keys(all).forEach(function (k) {   // prune expired sign-ins
+    if (k.indexOf('LS:') === 0) { try { if (JSON.parse(all[k]).x < now) P.deleteProperty(k); } catch (e) { P.deleteProperty(k); } }
+  });
+  P.setProperty('LS:' + kind + ':' + id, JSON.stringify({ v: val, x: now + SESSION_DAYS * 86400000 }));
+}
+function lsGet_(kind, id) {
+  if (!id) return null;
+  const P = props_(), k = 'LS:' + kind + ':' + id, raw = P.getProperty(k);
+  if (!raw) return null;
+  let o; try { o = JSON.parse(raw); } catch (e) { return null; }
+  const now = Date.now();
+  if (o.x < now) { P.deleteProperty(k); return null; }
+  if (o.x - now < (SESSION_DAYS - 1) * 86400000) { o.x = now + SESSION_DAYS * 86400000; P.setProperty(k, JSON.stringify(o)); } // stay signed in while in use
+  return o.v;
+}
+function sess_(s) { return lsGet_('h', s); }
 
 // ---------- party sign-in (PIN set only through an emailed code; PINs are stored as salted hashes, never in the sheet) ----------
 function props_() { return PropertiesService.getScriptProperties(); }
@@ -90,7 +109,7 @@ function pinHash_(role, pin) {
   if (!salt) { salt = rnd_(16); props_().setProperty('salt:' + role, salt); }
   return sha_(salt + ':' + role + ':' + pin);
 }
-function csess_(s) { return s ? CacheService.getScriptCache().get('csess:' + s) : null; }
+function csess_(s) { return lsGet_('c', s); }
 function roleAuth_(m, b) { return !!(b.c && ((m.tok[b.c] && m.tok[b.c] === b.t) || (b.s && csess_(b.s) === b.c))); }
 
 // ---------- storage ----------
@@ -149,7 +168,7 @@ function doGet(e) {
     const items = rows.filter(function (r) { return r[4] !== 'open'; }).reverse().slice(0, 60).map(function (r) { return { id: r[0], date: r[1], time: r[2], host: r[3], status: r[4], parties: r[5], clashes: r[6] }; });
     return out_({ ok: true, items: items });
   }
-  return out_({ ok: true, version: '4.0.1' });
+  return out_({ ok: true, version: '4.1.0' });
 }
 
 function doPost(e) {
@@ -172,7 +191,7 @@ function handle_(b) {
     const em = String(b.email || '').trim().toLowerCase();
     if (!otpCheck_('host:' + em, b.code)) return { ok: false, error: 'wrong or expired code' };
     const s = Utilities.getUuid();
-    CacheService.getScriptCache().put('sess:' + s, em, 21600);
+    lsPut_('h', s, em);
     return { ok: true, session: s, email: em };
   }
   // ----- party sign-in: one link/QR, party picks its name and enters its PIN -----
@@ -209,7 +228,7 @@ function handle_(b) {
     if (pinHash_(b.role, String(b.pin)) !== stored) { cache.put(lk, String(tries + 1), 600); return { ok: false, error: 'wrong PIN' }; }
     cache.remove(lk);
     const sid = Utilities.getUuid();
-    cache.put('csess:' + sid, b.role, 21600);
+    lsPut_('c', sid, b.role);
     return { ok: true, session: sid, role: b.role };
   }
   if (b.action === 'myMeetings') {
