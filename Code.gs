@@ -1,4 +1,4 @@
-// VERSION: 4.2.0 - SIMOPS Meeting Record backend (single sign-in with per-party PIN set by email code, public record, email-OTP signatures, tamper-evident seal, map)
+// VERSION: 4.4.0 - SIMOPS Meeting Record backend (single sign-in with per-party PIN set by email code, public record, email-OTP signatures, tamper-evident seal, map)
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > put the HSSE host email(s) in HOST_EMAILS below >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -25,22 +25,15 @@ function rnd_(n) { return Utilities.getUuid().replace(/-/g, '').slice(0, n); }
 function mask_(e) { if (!e) return ''; const p = e.split('@'); return p[0].slice(0, 1) + '***@' + (p[1] || ''); }
 function okEmail_(e) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e || ''); }
 
-// ---------- clash detection (same area name, or pins within clashM metres) ----------
-function hav_(a, b) {
-  const R = 6371000, r = function (x) { return x * Math.PI / 180; };
-  const dl = r(b.lat - a.lat), dg = r(b.lng - a.lng);
-  const s = Math.pow(Math.sin(dl / 2), 2) + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.pow(Math.sin(dg / 2), 2);
-  return 2 * R * Math.asin(Math.sqrt(s));
-}
+// ---------- clash detection (same area name chosen by two different parties) ----------
 function clashList_(m) {
-  const rs = [], out = [], lim = m.clashM || 50;
+  const rs = [], out = [];
   CODES.forEach(function (c) { ((m.con[c] && m.con[c].rows) || []).forEach(function (r) { rs.push({ c: c, r: r }); }); });
   for (let x = 0; x < rs.length; x++) for (let y = x + 1; y < rs.length; y++) {
     const A = rs[x], B = rs[y]; if (A.c === B.c) continue;
     let why = '';
     const ka = (A.r.area || '').trim().toLowerCase(), kb = (B.r.area || '').trim().toLowerCase();
     if (ka && ka === kb) why = 'same area';
-    if (A.r.lat != null && B.r.lat != null) { const d = hav_(A.r, B.r); if (d <= lim) why += (why ? ' + ' : '') + Math.round(d) + ' m apart'; }
     if (why) out.push(NAMES[A.c] + ' (' + A.r.activity + ') <-> ' + NAMES[B.c] + ' (' + B.r.activity + '): ' + why);
   }
   return out;
@@ -51,9 +44,9 @@ function content_(m) {
   const con = {};
   CODES.forEach(function (c) {
     const e = m.con[c];
-    if (e && m.parts.indexOf(c) >= 0) con[c] = { name: e.name, rows: e.rows.map(function (r) { return { area: r.area, activity: r.activity, constraint: r.constraint, lat: r.lat == null ? null : r.lat, lng: r.lng == null ? null : r.lng }; }) };
+    if (e && m.parts.indexOf(c) >= 0) con[c] = { name: e.name, rows: e.rows.map(function (r) { return { area: r.area, activity: r.activity, details: r.details || '', constraint: r.constraint }; }) };
   });
-  return { id: m.id, host: m.host, date: m.date, time: m.time, clashM: m.clashM || 50, parts: m.parts, con: con, hostc: m.hostc || '', photos: (m.photos || []).map(sha_) };
+  return { id: m.id, host: m.host, date: m.date, time: m.time, parts: m.parts, con: con, hostc: m.hostc || '', photos: (m.photos || []).map(sha_) };
 }
 function contentHash_(m) { return sha_(JSON.stringify(content_(m))); }
 function sigHash_(who, s, H) { return sha_([who, s.name, s.emailFull, s.at, H, sha_(s.sign)].join('|')); }
@@ -168,7 +161,7 @@ function doGet(e) {
     const items = rows.filter(function (r) { return r[4] !== 'open'; }).reverse().slice(0, 60).map(function (r) { return { id: r[0], date: r[1], time: r[2], host: r[3], status: r[4], parties: r[5], clashes: r[6] }; });
     return out_({ ok: true, items: items });
   }
-  return out_({ ok: true, version: '4.2.0' });
+  return out_({ ok: true, version: '4.4.0' });
 }
 
 function doPost(e) {
@@ -298,7 +291,7 @@ function handle_(b) {
     if (!owner) return { ok: false, error: 'session' };
     const m = {
       id: rnd_(8), ht: rnd_(16), tok: {}, owner: owner, base: b.base,
-      host: b.host, date: b.date, time: b.time, hostEmails: b.hostEmails || owner, ackEmail: '', notedEmail: '', clashM: 50, areas: b.areas || [],
+      host: b.host, date: b.date, time: b.time, hostEmails: b.hostEmails || owner, ackEmail: '', notedEmail: '', areas: b.areas || [],
       status: 'open', con: {}, parts: [], sign: {}, photos: [], hostc: '', created: new Date().toISOString()
     };
     ROLES.forEach(function (r) { m.tok[r] = rnd_(16); });
@@ -321,7 +314,7 @@ function handle_(b) {
   if (b.action === 'meta') {
     if (!isHost) return { ok: false, error: 'host only' };
     if (m.status === 'signing' || m.status === 'done') return { ok: false, error: 'record is locked for signing' };
-    ['host', 'date', 'time', 'hostEmails', 'ackEmail', 'notedEmail', 'clashM', 'areas', 'hostc'].forEach(function (k) { if (b[k] !== undefined) m[k] = b[k]; });
+    ['host', 'date', 'time', 'hostEmails', 'ackEmail', 'notedEmail', 'areas', 'hostc'].forEach(function (k) { if (b[k] !== undefined) m[k] = b[k]; });
     save_(m); return { ok: true };
   }
   if (b.action === 'entry') {
@@ -398,14 +391,14 @@ function pdfBlob_(m) {
   h += '<h2 style="letter-spacing:3px;color:#555">SIMOPS MEETING RECORD</h2>';
   h += '<p><b>Host:</b> ' + esc_(m.host) + ' &nbsp; <b>Date:</b> ' + esc_(m.date) + ' &nbsp; <b>Time:</b> ' + esc_(m.time) + '</p>';
   if (cl.length) h += '<p style="background:#fff3cd;padding:6px"><b>Possible clashes:</b><br>' + cl.map(esc_).join('<br>') + '</p>';
-  h += '<table border="1" cellspacing="0" cellpadding="4" width="100%"><tr style="background:#eee"><th>Contractor</th><th>Area</th><th>Planned activity</th><th>Agreed constraint</th><th>Location (lat, lng)</th><th>Signed by</th></tr>';
+  h += '<table border="1" cellspacing="0" cellpadding="4" width="100%"><tr style="background:#eee"><th>Contractor</th><th>Area</th><th>Planned activity</th><th>Agreed constraint</th><th>Signed by</th></tr>';
   CODES.forEach(function (c) {
     const rows = (m.con[c] && m.con[c].rows) || []; if (!rows.length) return;
     const s = m.sign[c];
     const sig = s ? esc_(s.name) + '<br><img src="' + s.sign + '" height="40"><br>' + esc_(s.at) + '<br>' + esc_(s.method) : '';
     rows.forEach(function (r, i) {
       h += '<tr>' + (i === 0 ? '<td rowspan="' + rows.length + '"><b>' + NAMES[c] + '</b></td>' : '') +
-        '<td>' + esc_(r.area) + '</td><td>' + esc_(r.activity) + '</td><td>' + esc_(r.constraint) + '</td><td>' + (r.lat != null ? r.lat.toFixed(6) + ', ' + r.lng.toFixed(6) : '') + '</td>' +
+        '<td>' + esc_(r.area) + '</td><td>' + esc_(r.activity) + (r.details ? '<br><i>' + esc_(r.details) + '</i>' : '') + '</td><td>' + esc_(r.constraint) + '</td>' +
         (i === 0 ? '<td rowspan="' + rows.length + '">' + sig + '</td>' : '') + '</tr>';
     });
   });
@@ -428,7 +421,7 @@ function sendPdf_(m) {
   if (!to) return;
   MailApp.sendEmail({
     to: to, subject: 'SIMOPS Meeting Record - ' + m.date + ' ' + (m.time || ''),
-    body: 'All parties have signed. The SIMOPS Meeting Record is attached.\n\nHost: ' + m.host + '\nRecord and map: ' + m.base + '?m=' + m.id + '\nVerify authenticity: ' + m.base + '?v=' + m.id,
+    body: 'All parties have signed. The SIMOPS Meeting Record is attached.\n\nHost: ' + m.host + '\nRecord: ' + m.base + '?m=' + m.id + '\nVerify authenticity: ' + m.base + '?v=' + m.id,
     attachments: [pdfBlob_(m)]
   });
 }

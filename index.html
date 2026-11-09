@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>SIMOPS Meeting Record</title>
 <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
 <style>
 :root{--red:#DD1D21;--yel:#FBCE07;--ink:#1f2933;--grey:#6b7280;--line:#d5d9de;--bg:#f5f6f7;--green:#6BB04A}
 *{box-sizing:border-box}
@@ -29,6 +28,7 @@ label{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.08em
 img,canvas,video{max-width:100%}
 input,textarea,select{min-width:0;width:100%;font:inherit;font-size:15px;padding:8px;border:1px solid var(--line);border-radius:4px;background:#fff}
 textarea{min-height:80px;resize:vertical}
+.row textarea{min-height:44px}
 h2{margin:0 0 10px;font-weight:500;font-size:17px;letter-spacing:.12em;color:var(--red)}
 .btn{min-height:42px;font:inherit;border:0;border-radius:4px;padding:10px 16px;cursor:pointer;background:var(--red);color:#fff;letter-spacing:.05em;margin:4px 6px 4px 0;text-decoration:none;display:inline-block}
 .btn.sec{background:#fff;color:var(--ink);border:1px solid var(--line)}
@@ -43,7 +43,7 @@ tr.bad td{background:#fff3cd}
 .okb{background:#e6f4e0;border-left:5px solid var(--green);padding:10px 12px;margin-bottom:14px;font-size:14px}
 .badb{background:#fde4e4;border-left:5px solid var(--red);padding:10px 12px;margin-bottom:14px;font-size:14px}
 .mut{color:var(--grey);font-size:14px}.mono{font-family:monospace;font-size:11px;word-break:break-all;color:var(--grey)}
-.row{display:grid;grid-template-columns:1fr 1.5fr 1.5fr 44px 32px;gap:6px;margin-top:6px}
+.row{display:grid;grid-template-columns:1fr 1.2fr 1.4fr 1.2fr 32px;gap:6px;margin-top:6px}
 .x{border:0;background:none;color:var(--red);font-size:20px;cursor:pointer}
 canvas.pad{width:100%;height:clamp(90px,18vh,170px);border:1px dashed var(--grey);border-radius:4px;background:#fafafa;touch-action:none}
 .sigimg{height:50px;display:block}
@@ -58,8 +58,7 @@ canvas.pad{width:100%;height:clamp(90px,18vh,170px);border:1px dashed var(--grey
 .mbox{background:#fff;width:min(900px,96vw);max-height:96vh;max-height:96dvh;overflow-y:auto;border-radius:6px}
 .tag{display:inline-block;font-size:11px;padding:2px 6px;border-radius:3px;background:#e9ebee;margin-left:6px;text-transform:uppercase;letter-spacing:.06em}
 .tag.ok{background:var(--green);color:#fff}
-.pinb{border:1px solid var(--line);background:#fff;border-radius:4px;cursor:pointer;font-size:16px}.pinb.set{background:var(--green);color:#fff}
-@media(max-width:640px){.row{grid-template-columns:1fr 44px 32px}.row input{grid-column:1/-1}
+@media(max-width:640px){.row{grid-template-columns:1fr 32px}.row input,.row .ar,.row textarea{grid-column:1/-1}
  input,textarea,select{font-size:16px}
  header{padding:10px 12px}.logo{max-width:44vw}h1{order:3;flex:1 0 100%;letter-spacing:.14em}
  .btn{width:100%;text-align:center;margin-right:0}
@@ -67,34 +66,35 @@ canvas.pad{width:100%;height:clamp(90px,18vh,170px);border:1px dashed var(--grey
  table{font-size:13px}th,td{padding:4px}
  main{padding:10px}.card{padding:12px}}
 @media(max-width:380px){.steps div{font-size:9px}h2{letter-spacing:.06em}}
-@media(max-height:480px) and (orientation:landscape){#pm{height:55vh!important}#map{height:300px!important}}
+
 </style>
 </head>
 <body>
 <header>
   <img class="logo" src="logo.png" alt="EcoOils Mentari" style="height:clamp(36px,6vw,56px);width:auto;max-width:100%;display:block">
   <h1 data-t="title">SIMOPS Meeting Record</h1>
-  <div class="rt"><div class="ver">v4.2.1</div>
+  <div class="rt"><div class="ver">v4.3.1</div>
     <div class="lang"><button data-l="en">EN</button><button data-l="id">ID</button><button data-l="ms">MS</button></div></div>
 </header>
 <main id="app"></main>
 <div id="peek"><img alt=""></div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
-const VERSION='4.2.1';
+const VERSION='4.3.1';
 const API_URL='https://script.google.com/macros/s/AKfycbz9C-pbRRJ0Rf1EseelBe1IGp0FkydwoIZ0e1xoBgC_Wkxl7C7dkOhFh3c9v2EczQCMCA/exec';
 const CODES=['KKS','WEN','GSB','PBS','ECO'];
 const ROLES=[...CODES,'ack','noted'];
 const NAME={KKS:'KKS',WEN:'WEN',GSB:'GSB',PBS:'PBS',ECO:'EcoOils'};
 const COLORS={KKS:'#2563eb',WEN:'#16a34a',GSB:'#f59e0b',PBS:'#9333ea',ECO:'#0891b2'};
-const CENTER=[3.1417,99.2931]; // Sei Mangkei SEZ - check on first use
-const DEF_AREAS=['DTP Building','WTP Area','Silo Tank Area','MCC Room','PTU','North-East Area','South Area'];
+const AREAS=['ADMINISTRATION BUILDING','BLOCK 6B','COOLING TOWER','CONTROL ROOM, MCC ROOM','DDE TREATMENT PLANT (DTP)','DIESEL TANK','DIRTY COOLING TOWER','DRY AND LIQUID CHEMICAL STORAGE','EFFLUENT TREATMENT PLANT (ETP)','ELECTRICAL SUBSTATION (PLN)','EXTRACTION PLANT','FA PLANT','FIRE WATER PUMP HOUSE','FIRE WATER TANK','HEXANE AND DIESEL RECEIVING BAY','HEXANE TANK','LOADING/UNLOADING AREA (PUMP HOUSE)','OFFICE VEHICLE PARKING AREA','OIL POLISHING PLANT','PIPE RACK','PRE TREATMENT UNIT (PTU)','RAW WATER PIT','SCHEDULED & DOMESTIC WASTE SHED','SECURITY BUILDING','SECURITY POST','SILO','TANK FARM','TRUCK PARKING AREA','VAPOR ABSORPTION MACHINE (VAM) SHED','WAREHOUSE','WASTE WATER TREATMENT PLANT (WWTP)','WATER TANK','WATER TREATMENT PLANT (WTP) AND WATER TANKS','WEIGHT BRIDGE','WORKSHOP AREA']; // same area names as the UA/UC report form and its QR stickers
+const ACTS={"Lifting and heavy equipment (Pengangkatan dan alat berat)": ["Crane lifting (Pengangkatan dengan crane)", "Mobile crane setup / movement (Pemasangan / pergerakan mobile crane)", "Rigging and slinging (Rigging dan slinging)", "Heavy equipment movement (Pergerakan alat berat)", "Forklift / telehandler operation (Operasi forklift / telehandler)", "Manlift / scissor lift / boom lift (Manlift / scissor lift)", "Truck / heavy vehicle delivery (Pengiriman truk / kendaraan berat)", "Piling / drilling rig operation (Operasi alat piling / bor)"], "Hot work (Pekerjaan panas)": ["Welding (Pengelasan)", "Gas cutting / grinding (Pemotongan gas / gerinda)", "Brazing / soldering (Brazing / solder)", "Pre-heat / PWHT (Pemanasan awal / PWHT)", "Hot tapping (Hot tapping)"], "Civil and structural (Sipil dan struktur)": ["Excavation / trenching (Penggalian / parit)", "Concrete pouring (Pengecoran beton)", "Formwork / rebar (Bekisting / pembesian)", "Backfilling / compaction (Penimbunan / pemadatan)", "Road / paving works (Pekerjaan jalan / paving)", "Structural steel erection (Ereksi baja struktur)", "Demolition (Pembongkaran)", "Dewatering (Pengeringan air)"], "Mechanical and piping (Mekanikal dan perpipaan)": ["Pipe fabrication (Fabrikasi pipa)", "Pipe installation / erection (Pemasangan pipa)", "Equipment / vessel / tank installation (Pemasangan peralatan / bejana / tangki)", "Rotating equipment alignment (Alignment peralatan berputar)", "Bolt tightening / flange work (Pengencangan baut / flange)", "Scaffolding erection (Pemasangan scaffolding)", "Scaffolding dismantling (Pembongkaran scaffolding)", "Insulation / cladding (Isolasi / cladding)", "Abrasive blasting (Sandblasting)", "Painting / coating (Pengecatan / pelapisan)", "Tie-in works (Pekerjaan tie-in)"], "Electrical and instrument (Listrik dan instrumen)": ["Cable pulling (Penarikan kabel)", "Cable tray / conduit installation (Pemasangan cable tray / konduit)", "Cable termination (Terminasi kabel)", "Panel / MCC installation (Pemasangan panel / MCC)", "Instrument installation (Pemasangan instrumen)", "Loop checking / calibration (Loop check / kalibrasi)", "Earthing / lighting (Pembumian / penerangan)", "Energisation / live testing (Energisasi / pengujian bertegangan)", "Temporary power / generator (Listrik sementara / generator)"], "Testing and commissioning (Pengujian dan komisioning)": ["Hydrotest (Uji hidrostatik)", "Pneumatic / leak test (Uji pneumatik / kebocoran)", "Flushing / air blowing (Flushing / air blowing)", "Nitrogen purging / inerting (Purging nitrogen / inerting)", "Pre-commissioning (Pra-komisioning)", "Commissioning (Komisioning)", "Introduction of hexane / hydrocarbon (Pemasukan hexane / hidrokarbon)", "Function test / SAT (Uji fungsi / SAT)", "Safety valve (PSV) testing (Pengujian katup pengaman PSV)", "Fire water system testing (Pengujian sistem air pemadam)", "Start-up / shutdown (Start-up / shutdown)"], "Special and high risk (Khusus dan berisiko tinggi)": ["Radiography (RT) (Radiografi RT)", "NDT - UT / MPI / DPT (NDT - UT / MPI / DPT)", "Confined space entry (Masuk ruang terbatas)", "Tank cleaning / entry (Pembersihan / masuk tangki)", "Working at height (Bekerja di ketinggian)", "Isolation / LOTO (Isolasi / LOTO)", "Line breaking / opening (Pembukaan jalur pipa)", "Gas freeing / depressurising / draining (Gas free / depressurisasi / pengurasan)", "Chemical handling (Penanganan bahan kimia)", "Hexane / fuel offloading (Bongkar muat hexane / BBM)", "Hazardous waste handling (Penanganan limbah B3)"], "Support and operations (Dukungan dan operasi)": ["Material delivery / offloading (Pengiriman / bongkar material)", "Housekeeping / waste removal (Kebersihan / pengangkutan sampah)", "Survey / geotechnical (Survei / geoteknik)", "Inspection / audit (Inspeksi / audit)", "Fire watch (Pengawas api)", "Plant operation / sampling / rounds (Operasi pabrik / sampling / patroli operator)", "Maintenance of existing plant (Perawatan pabrik yang ada)", "Landscaping / grass cutting (Landscaping / potong rumput)", "Emergency drill / muster (Latihan darurat / muster)", "Visitor / VIP tour (Kunjungan tamu / VIP)", "Night work (Pekerjaan malam)"]};
+const ACTALL=Object.values(ACTS).flat();
+const areaList=()=>[...new Set([...AREAS,...(M&&M.areas?M.areas.map(x=>String(x).trim().toUpperCase()).filter(Boolean):[])])];
 const STAT=['open','discussion','signing','done'];
 const T={
-en:{title:'SIMOPS Meeting Record',newm:'New SIMOPS meeting',host:'Host',date:'Date',time:'Time',hem:'Host email(s) to receive the PDF (comma separated)',create:'Create meeting and open entry',mine:'My meetings',open:'Open',s_open:'Entry',s_discussion:'Discussion',s_signing:'Signing',s_done:'Completed',savedet:'Save details',links:'Links to send (public link, then each party)',publ:'Public read-only link',copy:'Copy',copied:'Copied',wa:'WhatsApp',areas:'Site areas (one per line)',area:'Area / Location',activity:'Planned activity',constraint:'Agreed constraint',addrow:'+ Add activity',saveentry:'Save my entries',cname:'Your name',cemail:'Your email (a code is sent here to verify your signature)',saved:'Saved',clash:'Possible clashes',clashM:'Clash distance between pins (metres)',fix:'Fix details and start discussion',reopen:'Reopen entries',tosign:'Lock record and start signing',back:'Back to discussion',photos:'Meeting photo',drop:'Drop photo here or tap +',hc:'Host Comments',savehc:'Save comments',signhere:'Sign here',name:'Name',signed:'Signed',ack:'Acknowledged (EcoOils Construction Representative)',noted:'Noted (EcoOils HSSE)',ackS:'Acknowledged',notedS:'Noted',ackem:'Acknowledged: email of EcoOils Construction Representative',notedem:'Noted: email of EcoOils HSSE',pdf:'Open PDF',resend:'Send PDF again',refresh:'Refresh',noapi:'Setup needed: paste the Apps Script web app URL into API_URL in index.html.',bad:'Invalid or missing link.',none:'Not entered yet',entered:'Entered',locked:'Entries are locked.',needsign:'Waiting for signature',done:'All parties signed. PDF generated and emailed.',clear:'Clear',err:'Error',sendall:'Sent to all recipients',mapT:'Activity map',pin:'Pin',gps:'Use my GPS',pinnote:'Tap the map to place the pin',register:'Meeting register',hostlogin:'Host login',email:'Email',sendcode:'Send verification code',code:'6-digit code',login:'Login',logout:'Logout',nosess:'Session expired, please log in again',stay:'You stay signed in on this device for 30 days.',crole:'Select your company',cpin:'Your PIN',clogin:'Sign in',cset:'First time, or forgot PIN? Set your PIN',setnote:'Enter your email, get a code, then choose your own 4-8 digit PIN. Only you know it.',pinnew:'New PIN (4-8 digits)',pinset:'Save PIN',nomtg:'No meetings yet',reg:'Parties and PINs',pinok:'PIN saved. You can sign in now.',pinok2:'PIN set',pinno:'no PIN',pinreset:'Reset PIN',qrt:'One QR for everyone',qrn:'Print or share this QR. Each party picks its name and enters its own PIN.',csout:'Sign out',welc:'Signed in:',hostlog:'HSSE host login',codesent:'Code sent to',otpnote:'Your signature is verified by a one-time code sent to your registered email, and sealed to the record content.',confirmsign:'Confirm code and sign',verify:'Verify this record',vvalid:'VALID: the record is unchanged since it was signed.',vbad:'NOT VALID: the record or a signature does not match the sealed hash.',method:'Method',publicnote:'Read-only public view',sealed:'Record sealed',notsealed:'This record is not sealed yet (signing has not started).',noreg:'No meetings yet',draft:'Entries are still being collected.',hash:'Content hash',seal:'Seal',signers:'Signers',nosess:'Login expired, please login again.'},
-id:{title:'Catatan Rapat SIMOPS',newm:'Rapat SIMOPS baru',host:'Tuan Rumah',date:'Tanggal',time:'Waktu',hem:'Email tuan rumah penerima PDF (pisahkan koma)',create:'Buat rapat dan buka pengisian',mine:'Rapat saya',open:'Buka',s_open:'Pengisian',s_discussion:'Diskusi',s_signing:'Tanda tangan',s_done:'Selesai',savedet:'Simpan detail',links:'Tautan untuk dikirim (tautan publik, lalu tiap pihak)',publ:'Tautan publik (hanya baca)',copy:'Salin',copied:'Tersalin',wa:'WhatsApp',areas:'Area lokasi (satu per baris)',area:'Area / Lokasi',activity:'Rencana kegiatan',constraint:'Kendala yang disepakati',addrow:'+ Tambah kegiatan',saveentry:'Simpan isian saya',cname:'Nama Anda',cemail:'Email Anda (kode dikirim ke sini untuk verifikasi tanda tangan)',saved:'Tersimpan',clash:'Kemungkinan bentrok',clashM:'Jarak bentrok antar pin (meter)',fix:'Tetapkan detail dan mulai diskusi',reopen:'Buka kembali pengisian',tosign:'Kunci catatan dan mulai tanda tangan',back:'Kembali ke diskusi',photos:'Foto rapat',drop:'Taruh foto di sini atau ketuk +',hc:'Komentar Tuan Rumah',savehc:'Simpan komentar',signhere:'Tanda tangan di sini',name:'Nama',signed:'Sudah tanda tangan',ack:'Mengetahui (Perwakilan Konstruksi EcoOils)',noted:'Dicatat (HSSE EcoOils)',ackS:'Mengetahui',notedS:'Dicatat',ackem:'Mengetahui: email Perwakilan Konstruksi EcoOils',notedem:'Dicatat: email HSSE EcoOils',pdf:'Buka PDF',resend:'Kirim PDF lagi',refresh:'Segarkan',noapi:'Perlu pengaturan: tempel URL web app Apps Script ke API_URL di index.html.',bad:'Tautan tidak valid.',none:'Belum diisi',entered:'Sudah diisi',locked:'Isian dikunci.',needsign:'Menunggu tanda tangan',done:'Semua pihak sudah tanda tangan. PDF dibuat dan dikirim lewat email.',clear:'Hapus',err:'Kesalahan',sendall:'Terkirim ke semua penerima',mapT:'Peta kegiatan',pin:'Pin',gps:'Pakai GPS saya',pinnote:'Ketuk peta untuk menaruh pin',register:'Daftar rapat',hostlogin:'Login tuan rumah',email:'Email',sendcode:'Kirim kode verifikasi',code:'Kode 6 digit',login:'Masuk',logout:'Keluar',nosess:'Sesi berakhir, silakan masuk lagi',stay:'Anda tetap masuk di perangkat ini selama 30 hari.',crole:'Pilih perusahaan Anda',cpin:'PIN Anda',clogin:'Masuk',cset:'Pertama kali atau lupa PIN? Atur PIN',setnote:'Masukkan email, terima kode, lalu pilih PIN 4-8 digit Anda sendiri.',pinnew:'PIN baru (4-8 digit)',pinset:'Simpan PIN',nomtg:'Belum ada rapat',reg:'Pihak dan PIN',pinok:'PIN tersimpan. Silakan masuk.',pinok2:'PIN ada',pinno:'belum ada PIN',pinreset:'Reset PIN',qrt:'Satu QR untuk semua',qrn:'Cetak atau bagikan QR ini. Setiap pihak memilih nama dan memasukkan PIN sendiri.',csout:'Keluar',welc:'Masuk sebagai:',hostlog:'Login host HSSE',codesent:'Kode dikirim ke',otpnote:'Tanda tangan Anda diverifikasi dengan kode sekali pakai ke email terdaftar, dan disegel ke isi catatan.',confirmsign:'Konfirmasi kode dan tanda tangan',verify:'Verifikasi catatan ini',vvalid:'VALID: catatan tidak berubah sejak ditandatangani.',vbad:'TIDAK VALID: catatan atau tanda tangan tidak cocok dengan hash tersegel.',method:'Metode',publicnote:'Tampilan publik (hanya baca)',sealed:'Catatan tersegel',notsealed:'Catatan belum disegel (tanda tangan belum dimulai).',noreg:'Belum ada rapat',draft:'Isian masih dikumpulkan.',hash:'Hash isi',seal:'Segel',signers:'Penanda tangan',nosess:'Login kedaluwarsa, silakan masuk lagi.'},
-ms:{title:'Rekod Mesyuarat SIMOPS',newm:'Mesyuarat SIMOPS baharu',host:'Tuan Rumah',date:'Tarikh',time:'Masa',hem:'E-mel tuan rumah penerima PDF (asing dengan koma)',create:'Cipta mesyuarat dan buka pengisian',mine:'Mesyuarat saya',open:'Buka',s_open:'Pengisian',s_discussion:'Perbincangan',s_signing:'Tandatangan',s_done:'Selesai',savedet:'Simpan butiran',links:'Pautan untuk dihantar (pautan awam, kemudian setiap pihak)',publ:'Pautan awam (baca sahaja)',copy:'Salin',copied:'Disalin',wa:'WhatsApp',areas:'Kawasan tapak (satu setiap baris)',area:'Kawasan / Lokasi',activity:'Aktiviti dirancang',constraint:'Kekangan dipersetujui',addrow:'+ Tambah aktiviti',saveentry:'Simpan isian saya',cname:'Nama anda',cemail:'E-mel anda (kod dihantar ke sini untuk mengesahkan tandatangan)',saved:'Disimpan',clash:'Kemungkinan bertembung',clashM:'Jarak bertembung antara pin (meter)',fix:'Tetapkan butiran dan mulakan perbincangan',reopen:'Buka semula pengisian',tosign:'Kunci rekod dan mulakan tandatangan',back:'Kembali ke perbincangan',photos:'Foto mesyuarat',drop:'Letak foto di sini atau tekan +',hc:'Komen Tuan Rumah',savehc:'Simpan komen',signhere:'Tandatangan di sini',name:'Nama',signed:'Telah tandatangan',ack:'Diakui (Wakil Pembinaan EcoOils)',noted:'Dicatat (HSSE EcoOils)',ackS:'Diakui',notedS:'Dicatat',ackem:'Diakui: e-mel Wakil Pembinaan EcoOils',notedem:'Dicatat: e-mel HSSE EcoOils',pdf:'Buka PDF',resend:'Hantar PDF semula',refresh:'Muat semula',noapi:'Perlu persediaan: tampal URL web app Apps Script ke API_URL dalam index.html.',bad:'Pautan tidak sah.',none:'Belum diisi',entered:'Telah diisi',locked:'Isian dikunci.',needsign:'Menunggu tandatangan',done:'Semua pihak telah tandatangan. PDF dijana dan dihantar melalui e-mel.',clear:'Padam',err:'Ralat',sendall:'Dihantar kepada semua penerima',mapT:'Peta aktiviti',pin:'Pin',gps:'Guna GPS saya',pinnote:'Tekan peta untuk letak pin',register:'Daftar mesyuarat',hostlogin:'Log masuk tuan rumah',email:'E-mel',sendcode:'Hantar kod pengesahan',code:'Kod 6 digit',login:'Log masuk',logout:'Log keluar',nosess:'Sesi tamat, sila log masuk semula',stay:'Anda kekal log masuk pada peranti ini selama 30 hari.',crole:'Pilih syarikat anda',cpin:'PIN anda',clogin:'Log masuk',cset:'Kali pertama atau lupa PIN? Tetapkan PIN',setnote:'Masukkan e-mel, terima kod, kemudian pilih PIN 4-8 digit anda sendiri.',pinnew:'PIN baharu (4-8 digit)',pinset:'Simpan PIN',nomtg:'Tiada mesyuarat lagi',reg:'Pihak dan PIN',pinok:'PIN disimpan. Sila log masuk.',pinok2:'PIN ditetapkan',pinno:'tiada PIN',pinreset:'Set semula PIN',qrt:'Satu QR untuk semua',qrn:'Cetak atau kongsi QR ini. Setiap pihak pilih nama dan masukkan PIN sendiri.',csout:'Log keluar',welc:'Log masuk sebagai:',hostlog:'Log masuk host HSSE',codesent:'Kod dihantar ke',otpnote:'Tandatangan anda disahkan dengan kod sekali guna ke e-mel berdaftar, dan dimeterai pada kandungan rekod.',confirmsign:'Sahkan kod dan tandatangan',verify:'Sahkan rekod ini',vvalid:'SAH: rekod tidak berubah sejak ditandatangani.',vbad:'TIDAK SAH: rekod atau tandatangan tidak sepadan dengan hash termeterai.',method:'Kaedah',publicnote:'Paparan awam (baca sahaja)',sealed:'Rekod dimeterai',notsealed:'Rekod belum dimeterai (tandatangan belum bermula).',noreg:'Tiada mesyuarat lagi',draft:'Isian masih dikumpul.',hash:'Hash kandungan',seal:'Meterai',signers:'Penandatangan',nosess:'Log masuk tamat, sila log masuk semula.'}};
+en:{title:'SIMOPS Meeting Record',newm:'New SIMOPS meeting',host:'Host',date:'Date',time:'Time',hem:'Host email(s) to receive the PDF (comma separated)',create:'Create meeting and open entry',mine:'My meetings',open:'Open',s_open:'Entry',s_discussion:'Discussion',s_signing:'Signing',s_done:'Completed',savedet:'Save details',links:'Links to send (public link, then each party)',publ:'Public read-only link',copy:'Copy',copied:'Copied',wa:'WhatsApp',areas:'Site areas (one per line)',area:'Area / Location',activity:'Planned activity',constraint:'Agreed constraint',addrow:'+ Add activity',saveentry:'Save my entries',cname:'Your name',cemail:'Your email (a code is sent here to verify your signature)',saved:'Saved',clash:'Possible clashes',clashM:'Clash distance between pins (metres)',fix:'Fix details and start discussion',reopen:'Reopen entries',tosign:'Lock record and start signing',back:'Back to discussion',photos:'Meeting photo',drop:'Drop photo here or tap +',hc:'Host Comments',savehc:'Save comments',signhere:'Sign here',name:'Name',signed:'Signed',ack:'Acknowledged (EcoOils Construction Representative)',noted:'Noted (EcoOils HSSE)',ackS:'Acknowledged',notedS:'Noted',ackem:'Acknowledged: email of EcoOils Construction Representative',notedem:'Noted: email of EcoOils HSSE',pdf:'Open PDF',resend:'Send PDF again',refresh:'Refresh',noapi:'Setup needed: paste the Apps Script web app URL into API_URL in index.html.',bad:'Invalid or missing link.',none:'Not entered yet',entered:'Entered',locked:'Entries are locked.',needsign:'Waiting for signature',done:'All parties signed. PDF generated and emailed.',clear:'Clear',err:'Error',sendall:'Sent to all recipients',mapT:'Activity map',pin:'Pin',gps:'Use my GPS',pinnote:'Tap the map to place the pin',register:'Meeting register',hostlogin:'Host login',email:'Email',sendcode:'Send verification code',code:'6-digit code',login:'Login',logout:'Logout',nosess:'Session expired, please log in again',stay:'You stay signed in on this device for 30 days.',other:'Other',details:'More details (time, crew size, equipment, exact spot)',crole:'Select your company',cpin:'Your PIN',clogin:'Sign in',cset:'First time, or forgot PIN? Set your PIN',setnote:'Enter your email, get a code, then choose your own 4-8 digit PIN. Only you know it.',pinnew:'New PIN (4-8 digits)',pinset:'Save PIN',nomtg:'No meetings yet',reg:'Parties and PINs',pinok:'PIN saved. You can sign in now.',pinok2:'PIN set',pinno:'no PIN',pinreset:'Reset PIN',qrt:'One QR for everyone',qrn:'Print or share this QR. Each party picks its name and enters its own PIN.',csout:'Sign out',welc:'Signed in:',hostlog:'HSSE host login',codesent:'Code sent to',otpnote:'Your signature is verified by a one-time code sent to your registered email, and sealed to the record content.',confirmsign:'Confirm code and sign',verify:'Verify this record',vvalid:'VALID: the record is unchanged since it was signed.',vbad:'NOT VALID: the record or a signature does not match the sealed hash.',method:'Method',publicnote:'Read-only public view',sealed:'Record sealed',notsealed:'This record is not sealed yet (signing has not started).',noreg:'No meetings yet',draft:'Entries are still being collected.',hash:'Content hash',seal:'Seal',signers:'Signers',nosess:'Login expired, please login again.'},
+id:{title:'Catatan Rapat SIMOPS',newm:'Rapat SIMOPS baru',host:'Tuan Rumah',date:'Tanggal',time:'Waktu',hem:'Email tuan rumah penerima PDF (pisahkan koma)',create:'Buat rapat dan buka pengisian',mine:'Rapat saya',open:'Buka',s_open:'Pengisian',s_discussion:'Diskusi',s_signing:'Tanda tangan',s_done:'Selesai',savedet:'Simpan detail',links:'Tautan untuk dikirim (tautan publik, lalu tiap pihak)',publ:'Tautan publik (hanya baca)',copy:'Salin',copied:'Tersalin',wa:'WhatsApp',areas:'Area lokasi (satu per baris)',area:'Area / Lokasi',activity:'Rencana kegiatan',constraint:'Kendala yang disepakati',addrow:'+ Tambah kegiatan',saveentry:'Simpan isian saya',cname:'Nama Anda',cemail:'Email Anda (kode dikirim ke sini untuk verifikasi tanda tangan)',saved:'Tersimpan',clash:'Kemungkinan bentrok',clashM:'Jarak bentrok antar pin (meter)',fix:'Tetapkan detail dan mulai diskusi',reopen:'Buka kembali pengisian',tosign:'Kunci catatan dan mulai tanda tangan',back:'Kembali ke diskusi',photos:'Foto rapat',drop:'Taruh foto di sini atau ketuk +',hc:'Komentar Tuan Rumah',savehc:'Simpan komentar',signhere:'Tanda tangan di sini',name:'Nama',signed:'Sudah tanda tangan',ack:'Mengetahui (Perwakilan Konstruksi EcoOils)',noted:'Dicatat (HSSE EcoOils)',ackS:'Mengetahui',notedS:'Dicatat',ackem:'Mengetahui: email Perwakilan Konstruksi EcoOils',notedem:'Dicatat: email HSSE EcoOils',pdf:'Buka PDF',resend:'Kirim PDF lagi',refresh:'Segarkan',noapi:'Perlu pengaturan: tempel URL web app Apps Script ke API_URL di index.html.',bad:'Tautan tidak valid.',none:'Belum diisi',entered:'Sudah diisi',locked:'Isian dikunci.',needsign:'Menunggu tanda tangan',done:'Semua pihak sudah tanda tangan. PDF dibuat dan dikirim lewat email.',clear:'Hapus',err:'Kesalahan',sendall:'Terkirim ke semua penerima',mapT:'Peta kegiatan',pin:'Pin',gps:'Pakai GPS saya',pinnote:'Ketuk peta untuk menaruh pin',register:'Daftar rapat',hostlogin:'Login tuan rumah',email:'Email',sendcode:'Kirim kode verifikasi',code:'Kode 6 digit',login:'Masuk',logout:'Keluar',nosess:'Sesi berakhir, silakan masuk lagi',stay:'Anda tetap masuk di perangkat ini selama 30 hari.',other:'Lainnya',details:'Detail tambahan (waktu, jumlah pekerja, peralatan, titik tepat)',crole:'Pilih perusahaan Anda',cpin:'PIN Anda',clogin:'Masuk',cset:'Pertama kali atau lupa PIN? Atur PIN',setnote:'Masukkan email, terima kode, lalu pilih PIN 4-8 digit Anda sendiri.',pinnew:'PIN baru (4-8 digit)',pinset:'Simpan PIN',nomtg:'Belum ada rapat',reg:'Pihak dan PIN',pinok:'PIN tersimpan. Silakan masuk.',pinok2:'PIN ada',pinno:'belum ada PIN',pinreset:'Reset PIN',qrt:'Satu QR untuk semua',qrn:'Cetak atau bagikan QR ini. Setiap pihak memilih nama dan memasukkan PIN sendiri.',csout:'Keluar',welc:'Masuk sebagai:',hostlog:'Login host HSSE',codesent:'Kode dikirim ke',otpnote:'Tanda tangan Anda diverifikasi dengan kode sekali pakai ke email terdaftar, dan disegel ke isi catatan.',confirmsign:'Konfirmasi kode dan tanda tangan',verify:'Verifikasi catatan ini',vvalid:'VALID: catatan tidak berubah sejak ditandatangani.',vbad:'TIDAK VALID: catatan atau tanda tangan tidak cocok dengan hash tersegel.',method:'Metode',publicnote:'Tampilan publik (hanya baca)',sealed:'Catatan tersegel',notsealed:'Catatan belum disegel (tanda tangan belum dimulai).',noreg:'Belum ada rapat',draft:'Isian masih dikumpulkan.',hash:'Hash isi',seal:'Segel',signers:'Penanda tangan',nosess:'Login kedaluwarsa, silakan masuk lagi.'},
+ms:{title:'Rekod Mesyuarat SIMOPS',newm:'Mesyuarat SIMOPS baharu',host:'Tuan Rumah',date:'Tarikh',time:'Masa',hem:'E-mel tuan rumah penerima PDF (asing dengan koma)',create:'Cipta mesyuarat dan buka pengisian',mine:'Mesyuarat saya',open:'Buka',s_open:'Pengisian',s_discussion:'Perbincangan',s_signing:'Tandatangan',s_done:'Selesai',savedet:'Simpan butiran',links:'Pautan untuk dihantar (pautan awam, kemudian setiap pihak)',publ:'Pautan awam (baca sahaja)',copy:'Salin',copied:'Disalin',wa:'WhatsApp',areas:'Kawasan tapak (satu setiap baris)',area:'Kawasan / Lokasi',activity:'Aktiviti dirancang',constraint:'Kekangan dipersetujui',addrow:'+ Tambah aktiviti',saveentry:'Simpan isian saya',cname:'Nama anda',cemail:'E-mel anda (kod dihantar ke sini untuk mengesahkan tandatangan)',saved:'Disimpan',clash:'Kemungkinan bertembung',clashM:'Jarak bertembung antara pin (meter)',fix:'Tetapkan butiran dan mulakan perbincangan',reopen:'Buka semula pengisian',tosign:'Kunci rekod dan mulakan tandatangan',back:'Kembali ke perbincangan',photos:'Foto mesyuarat',drop:'Letak foto di sini atau tekan +',hc:'Komen Tuan Rumah',savehc:'Simpan komen',signhere:'Tandatangan di sini',name:'Nama',signed:'Telah tandatangan',ack:'Diakui (Wakil Pembinaan EcoOils)',noted:'Dicatat (HSSE EcoOils)',ackS:'Diakui',notedS:'Dicatat',ackem:'Diakui: e-mel Wakil Pembinaan EcoOils',notedem:'Dicatat: e-mel HSSE EcoOils',pdf:'Buka PDF',resend:'Hantar PDF semula',refresh:'Muat semula',noapi:'Perlu persediaan: tampal URL web app Apps Script ke API_URL dalam index.html.',bad:'Pautan tidak sah.',none:'Belum diisi',entered:'Telah diisi',locked:'Isian dikunci.',needsign:'Menunggu tandatangan',done:'Semua pihak telah tandatangan. PDF dijana dan dihantar melalui e-mel.',clear:'Padam',err:'Ralat',sendall:'Dihantar kepada semua penerima',mapT:'Peta aktiviti',pin:'Pin',gps:'Guna GPS saya',pinnote:'Tekan peta untuk letak pin',register:'Daftar mesyuarat',hostlogin:'Log masuk tuan rumah',email:'E-mel',sendcode:'Hantar kod pengesahan',code:'Kod 6 digit',login:'Log masuk',logout:'Log keluar',nosess:'Sesi tamat, sila log masuk semula',stay:'Anda kekal log masuk pada peranti ini selama 30 hari.',other:'Lain-lain',details:'Butiran lanjut (masa, bilangan pekerja, peralatan, lokasi tepat)',crole:'Pilih syarikat anda',cpin:'PIN anda',clogin:'Log masuk',cset:'Kali pertama atau lupa PIN? Tetapkan PIN',setnote:'Masukkan e-mel, terima kod, kemudian pilih PIN 4-8 digit anda sendiri.',pinnew:'PIN baharu (4-8 digit)',pinset:'Simpan PIN',nomtg:'Tiada mesyuarat lagi',reg:'Pihak dan PIN',pinok:'PIN disimpan. Sila log masuk.',pinok2:'PIN ditetapkan',pinno:'tiada PIN',pinreset:'Set semula PIN',qrt:'Satu QR untuk semua',qrn:'Cetak atau kongsi QR ini. Setiap pihak pilih nama dan masukkan PIN sendiri.',csout:'Log keluar',welc:'Log masuk sebagai:',hostlog:'Log masuk host HSSE',codesent:'Kod dihantar ke',otpnote:'Tandatangan anda disahkan dengan kod sekali guna ke e-mel berdaftar, dan dimeterai pada kandungan rekod.',confirmsign:'Sahkan kod dan tandatangan',verify:'Sahkan rekod ini',vvalid:'SAH: rekod tidak berubah sejak ditandatangani.',vbad:'TIDAK SAH: rekod atau tandatangan tidak sepadan dengan hash termeterai.',method:'Kaedah',publicnote:'Paparan awam (baca sahaja)',sealed:'Rekod dimeterai',notsealed:'Rekod belum dimeterai (tandatangan belum bermula).',noreg:'Tiada mesyuarat lagi',draft:'Isian masih dikumpul.',hash:'Hash kandungan',seal:'Meterai',signers:'Penandatangan',nosess:'Log masuk tamat, sila log masuk semula.'}};
 let lang=localStorage.simopsLang||'en';
 const t=k=>(T[lang]&&T[lang][k])||T.en[k]||k;
 const $=s=>document.querySelector(s);
@@ -108,7 +108,7 @@ const AUTH=()=>TK?{c:CC,t:TK}:{c:CC,s:CS()};
 function csClear(){try{localStorage.removeItem('simopsCS');localStorage.removeItem('simopsCR')}catch(e){}}
 const BASE=location.origin+location.pathname;
 const RN=c=>c==='ack'?t('ackS'):c==='noted'?t('notedS'):NAME[c];
-let M=null,role=null,dirty=false,MAP=null;
+let M=null,role=null,dirty=false;
 
 async function post(b){const r=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(b)});return r.json()}
 async function get(p){const r=await fetch(API_URL+'?'+new URLSearchParams(p));return r.json()}
@@ -123,15 +123,13 @@ function pad(c){
   c.clr=()=>{x.clearRect(0,0,c.width,c.height);d=false};c.has=()=>d;
 }
 function lowres(f){return new Promise(res=>{const i=new Image(),u=URL.createObjectURL(f);i.onload=()=>{const s=Math.min(1,800/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=i.width*s;c.height=i.height*s;c.getContext('2d').drawImage(i,0,0,c.width,c.height);URL.revokeObjectURL(u);res(c.toDataURL('image/jpeg',.55))};i.src=u})}
-function hav(a,b){const R=6371000,r=x=>x*Math.PI/180,dl=r(b.lat-a.lat),dg=r(b.lng-a.lng),s=Math.sin(dl/2)**2+Math.cos(r(a.lat))*Math.cos(r(b.lat))*Math.sin(dg/2)**2;return 2*R*Math.asin(Math.sqrt(s))}
 function clashList(m){
-  const rs=[],out=[],lim=m.clashM||50;
+  const rs=[],out=[];
   CODES.forEach(c=>((m.con[c]&&m.con[c].rows)||[]).forEach((r,i)=>rs.push({c,i,r,key:c+'#'+i})));
   for(let x=0;x<rs.length;x++)for(let y=x+1;y<rs.length;y++){
     const A=rs[x],B=rs[y];if(A.c===B.c)continue;let why='';
     const ka=(A.r.area||'').trim().toLowerCase(),kb=(B.r.area||'').trim().toLowerCase();
     if(ka&&ka===kb)why='area';
-    if(A.r.lat!=null&&B.r.lat!=null){const d=hav(A.r,B.r);if(d<=lim)why+=(why?' + ':'')+Math.round(d)+' m'}
     if(why)out.push({a:A,b:B,why});
   }
   return out;
@@ -147,40 +145,8 @@ function overview(){
   const cl=clashList(M),bad=new Set();cl.forEach(x=>{bad.add(x.a.key);bad.add(x.b.key)});
   let h=cl.length?`<div class="warn"><b>${t('clash')}</b>${cl.map(x=>`<div>${RN(x.a.c)}: ${esc(x.a.r.activity)} ↔ ${RN(x.b.c)}: ${esc(x.b.r.activity)} — ${esc(x.why)}</div>`).join('')}</div>`:'';
   CODES.forEach(c=>{const rows=(M.con[c]&&M.con[c].rows)||[];
-    h+=`<div class="card"><h2 style="border-left:6px solid ${COLORS[c]};padding-left:8px">${RN(c)}${rows.length?`<span class="tag ok">${t('entered')}</span>`:''}</h2>`+(rows.length?`<table><tr><th>${t('area')}</th><th>${t('activity')}</th><th>${t('constraint')}</th></tr>`+rows.map((r,i)=>`<tr class="${bad.has(c+'#'+i)?'bad':''}"><td>${esc(r.area)}${r.lat!=null?' 📍':''}</td><td>${esc(r.activity)}</td><td>${esc(r.constraint)}</td></tr>`).join('')+'</table>':`<div class="mut">${t('none')}</div>`)+sigLine(c)+'</div>'});
+    h+=`<div class="card"><h2 style="border-left:6px solid ${COLORS[c]};padding-left:8px">${RN(c)}${rows.length?`<span class="tag ok">${t('entered')}</span>`:''}</h2>`+(rows.length?`<table><tr><th>${t('area')}</th><th>${t('activity')}</th><th>${t('constraint')}</th></tr>`+rows.map((r,i)=>`<tr class="${bad.has(c+'#'+i)?'bad':''}"><td>${esc(r.area)}</td><td>${esc(r.activity)}${r.details?`<div class="mut">${esc(r.details)}</div>`:''}</td><td>${esc(r.constraint)}</td></tr>`).join('')+'</table>':`<div class="mut">${t('none')}</div>`)+sigLine(c)+'</div>'});
   return h;
-}
-function mapCard(){return `<div class="card"><h2>${t('mapT')}</h2><div id="map" style="height:clamp(280px,48vh,620px);border-radius:4px"></div><div class="mut" style="margin-top:6px">${CODES.map(c=>`<span style="color:${COLORS[c]}">●</span> ${RN(c)}`).join(' &nbsp; ')} &nbsp; <span style="color:#DD1D21">◎</span> ${t('clash')}</div></div>`}
-function layers(m){
-  const sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Esri'});
-  const osm=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'});
-  sat.addTo(m);L.control.layers({Satellite:sat,Street:osm}).addTo(m);
-}
-function drawMap(){
-  const el=$('#map');if(!el||!window.L)return;
-  if(MAP){MAP.remove();MAP=null}
-  MAP=L.map(el).setView(CENTER,16);layers(MAP);
-  const cl=clashList(M),bad=new Set();cl.forEach(x=>{bad.add(x.a.key);bad.add(x.b.key)});
-  const pts=[];
-  CODES.forEach(c=>((M.con[c]&&M.con[c].rows)||[]).forEach((r,i)=>{
-    if(r.lat==null)return;const b=bad.has(c+'#'+i);pts.push([r.lat,r.lng]);
-    if(b)L.circle([r.lat,r.lng],{radius:(M.clashM||50)/2,color:'#DD1D21',weight:1,fillOpacity:.1}).addTo(MAP);
-    L.circleMarker([r.lat,r.lng],{radius:9,color:b?'#DD1D21':'#fff',weight:b?4:2,fillColor:COLORS[c],fillOpacity:.95}).addTo(MAP)
-      .bindPopup(`<b>${RN(c)}</b><br>${esc(r.activity)}<br>${esc(r.area)}<br><i>${esc(r.constraint)}</i>`);
-  }));
-  if(pts.length)MAP.fitBounds(pts,{maxZoom:18,padding:[30,30]});
-}
-function pickPin(initial,cb){
-  const ov=document.createElement('div');ov.className='modal';
-  ov.innerHTML=`<div class="mbox"><div id="pm" style="height:clamp(260px,58vh,640px)"></div><div style="padding:8px"><span class="mut">${t('pinnote')}</span><br><button class="btn sec" id="pgps">${t('gps')}</button><button class="btn" id="pok">OK</button><button class="btn sec" id="pcx">✕</button></div></div>`;
-  document.body.appendChild(ov);
-  const m=L.map('pm').setView(initial?[initial.lat,initial.lng]:CENTER,17);layers(m);
-  let cur=initial||null,mk=initial?L.marker([initial.lat,initial.lng]).addTo(m):null;
-  const setp=(la,ln)=>{cur={lat:la,lng:ln};if(mk)mk.setLatLng([la,ln]);else mk=L.marker([la,ln]).addTo(m)};
-  m.on('click',e=>setp(e.latlng.lat,e.latlng.lng));
-  $('#pgps').onclick=()=>navigator.geolocation.getCurrentPosition(p=>{setp(p.coords.latitude,p.coords.longitude);m.setView([cur.lat,cur.lng],18)},()=>msg('GPS'));
-  const close=()=>{m.remove();ov.remove()};
-  $('#pok').onclick=()=>{close();cb(cur)};$('#pcx').onclick=close;
 }
 function photosCard(canAdd){
   const ph=M.photos||[];
@@ -263,7 +229,7 @@ async function home(){
   }
   if(sess){
     $('#lo').onclick=()=>{localStorage.removeItem('simopsSess');home()};
-    $('#mk').onclick=async()=>{const r=await post({action:'create',session:sess,base:BASE,host:$('#h_host').value,date:$('#h_date').value,time:$('#h_time').value,hostEmails:$('#h_em').value,areas:DEF_AREAS});
+    $('#mk').onclick=async()=>{const r=await post({action:'create',session:sess,base:BASE,host:$('#h_host').value,date:$('#h_date').value,time:$('#h_time').value,hostEmails:$('#h_em').value,areas:[]});
       if(!r.ok){if(r.error==='session'){localStorage.removeItem('simopsSess');msg(t('nosess'));return home()}return msg(r.error||t('err'))}
       location.href=`${BASE}?m=${r.id}&ht=${r.ht}`};
     post({action:'mine',session:sess}).then(r=>{if(r.ok&&r.items.length)$('#mine').innerHTML=`<div class="card"><h2>${t('mine')}</h2>${r.items.map(x=>`<div class="lk"><a href="${BASE}?m=${x.id}&ht=${x.ht}">${esc(x.date)} ${esc(x.time||'')}</a> <span class="tag ${x.status==='done'?'ok':''}">${t('s_'+x.status)}</span></div>`).join('')}</div>`});
@@ -289,15 +255,14 @@ function hostView(){
   h+=`<div class="card"><h2>${t('savedet')}</h2><div class="grid">
    <div><label>${t('host')}</label><input id="d_host" value="${esc(M.host)}" ${dis}></div>
    <div><label>${t('date')}</label><input id="d_date" type="date" value="${esc(M.date)}" ${dis}></div>
-   <div><label>${t('time')}</label><input id="d_time" type="time" value="${esc(M.time)}" ${dis}></div>
-   <div><label>${t('clashM')}</label><input id="d_cm" type="number" min="5" value="${M.clashM||50}" ${dis}></div></div>
+   <div><label>${t('time')}</label><input id="d_time" type="time" value="${esc(M.time)}" ${dis}></div></div>
    <label style="margin-top:10px">${t('hem')}</label><input id="d_em" value="${esc(M.hostEmails||'')}" ${dis}>
    <div class="grid" style="margin-top:10px"><div><label>${t('ackem')}</label><input id="d_ack" type="email" value="${esc(M.ackEmail||'')}" ${dis}></div><div><label>${t('notedem')}</label><input id="d_nt" type="email" value="${esc(M.notedEmail||'')}" ${dis}></div></div>
    <label style="margin-top:10px">${t('areas')}</label><textarea id="d_areas" style="min-height:60px" ${dis}>${esc((M.areas||[]).join('\n'))}</textarea>
    <button class="btn" id="sd" ${dis}>${t('savedet')}</button></div>`;
   const pub=`${BASE}?m=${M.id}`;
   h+=`<div class="card"><h2>${t('links')}</h2><div class="lk"><b>${t('publ')}</b><div class="link">${pub}</div><button class="btn sec" data-copy="${pub}">${t('copy')}</button></div>${ROLES.map(c=>{const u=`${BASE}?m=${M.id}&c=${c}&t=${tok[c]}`;const lab=ROLES.indexOf(c)<5?RN(c):t(c);return `<div class="lk"><b>${lab}</b> ${M.con[c]&&M.con[c].rows&&M.con[c].rows.length?`<span class="tag ok">${t('entered')}</span>`:''}${M.sign&&M.sign[c]?`<span class="tag ok">${t('signed')}</span>`:''}<div class="link">${u}</div><button class="btn sec" data-copy="${u}">${t('copy')}</button><a class="btn sec" target="_blank" href="https://wa.me/?text=${encodeURIComponent('SIMOPS '+M.date+' '+(M.time||'')+' - '+lab+': '+u)}">${t('wa')}</a></div>`}).join('')}</div>`;
-  h+=overview()+mapCard();
+  h+=overview();
   h+=`<div class="card">`;
   if(M.status==='open')h+=`<button class="btn" data-st="discussion">${t('fix')}</button>`;
   if(M.status==='discussion')h+=`<button class="btn sec" data-st="open">${t('reopen')}</button><button class="btn" data-st="signing">${t('tosign')}</button>`;
@@ -310,10 +275,10 @@ function hostView(){
   $('#app').innerHTML=h;
   document.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>{navigator.clipboard.writeText(b.dataset.copy);b.textContent=t('copied')});
   document.querySelectorAll('[data-st]').forEach(b=>b.onclick=async()=>{const r=await post({action:'status',id:MID,ht:HT,to:b.dataset.st});if(!r.ok)msg(r.error||t('err'));load()});
-  $('#sd').onclick=async()=>{const r=await post({action:'meta',id:MID,ht:HT,host:$('#d_host').value,date:$('#d_date').value,time:$('#d_time').value,clashM:+$('#d_cm').value||50,hostEmails:$('#d_em').value,ackEmail:$('#d_ack').value,notedEmail:$('#d_nt').value,areas:$('#d_areas').value.split('\n').map(s=>s.trim()).filter(Boolean)});msg(r.ok?t('saved'):(r.error||t('err')));dirty=false;load()};
+  $('#sd').onclick=async()=>{const r=await post({action:'meta',id:MID,ht:HT,host:$('#d_host').value,date:$('#d_date').value,time:$('#d_time').value,hostEmails:$('#d_em').value,ackEmail:$('#d_ack').value,notedEmail:$('#d_nt').value,areas:$('#d_areas').value.split('\n').map(s=>s.trim()).filter(Boolean)});msg(r.ok?t('saved'):(r.error||t('err')));dirty=false;load()};
   $('#shc').onclick=async()=>{const r=await post({action:'meta',id:MID,ht:HT,hostc:$('#hc').value});msg(r.ok?t('saved'):(r.error||t('err')));dirty=false};
   const rs=$('#rs');if(rs)rs.onclick=async()=>{const r=await post({action:'resend',id:MID,ht:HT});msg(r.ok?t('sendall'):(r.error||t('err')))};
-  bindPhotos();drawMap();
+  bindPhotos();
 }
 
 /* ---------- PARTY (contractor / ack / noted) ---------- */
@@ -321,11 +286,11 @@ function partyView(){
   const isCon=CODES.includes(CC),e=(M.con&&M.con[CC])||{},open=M.status==='open';
   const rows=(e.rows&&e.rows.length)?e.rows:[{area:'',activity:'',constraint:''}];
   let h=stepper()+infoCard();
-  h+=`<datalist id="al">${(M.areas||[]).map(a=>`<option value="${esc(a)}">`).join('')}</datalist>`;
+  h+=``;
   h+=`<div class="card"><h2>${RN(CC)}</h2>`;
   if(isCon&&open)h+=`<div class="grid"><div><label>${t('cname')}</label><input id="c_name" value="${esc(e.name||'')}"></div>${TK?`<div><label>${t('cemail')}</label><input id="c_em" type="email" value="${esc(e.email||'')}"></div>`:''}</div><div id="rows"></div><button class="btn sec" id="ar">${t('addrow')}</button><br><button class="btn" id="se">${t('saveentry')}</button>`;
   else h+=`<div class="mut">${isCon?t('locked'):''}</div>`;
-  h+=`</div>`+overview()+mapCard();
+  h+=`</div>`+overview();
   if(sIdx()>=1)h+=photosCard(false);
   h+=hcRead()+sigCards();
   if(M.status==='signing'&&REQ().includes(CC)&&!(M.sign&&M.sign[CC]))h+=signCard();
@@ -333,23 +298,27 @@ function partyView(){
   $('#app').innerHTML=h;
   if(isCon&&open){
     const box=$('#rows');
-    const add=r=>{const d=document.createElement('div');d.className='row';d._p=r.lat!=null?{lat:r.lat,lng:r.lng}:null;
-      d.innerHTML=`<input list="al" class="ra" placeholder="${t('area')}" value="${esc(r.area)}"><input class="rb" placeholder="${t('activity')}" value="${esc(r.activity)}"><input class="rc" placeholder="${t('constraint')}" value="${esc(r.constraint)}"><button class="pinb ${d._p?'set':''}" title="${t('pin')}">📍</button><button class="x">×</button>`;
-      d.querySelector('.pinb').onclick=ev=>{const b=ev.currentTarget;pickPin(d._p,p=>{if(p){d._p=p;b.classList.add('set');dirty=true}})};
+    const add=r=>{const d=document.createElement('div');d.className='row';
+      const L=areaList(),cur=(r.area||'').trim(),isOther=cur&&!L.includes(cur.toUpperCase());
+      const ca=(r.activity||'').trim(),aOther=ca&&!ACTALL.includes(ca);
+      d.innerHTML=`<div class="ar"><select class="ra"><option value="">${t('area')}…</option>${L.map(a=>`<option value="${esc(a)}" ${!isOther&&cur.toUpperCase()===a?'selected':''}>${esc(a)}</option>`).join('')}<option value="__other" ${isOther?'selected':''}>${t('other')}</option></select><input class="ro" placeholder="${t('area')}" value="${isOther?esc(cur):''}" style="margin-top:4px;${isOther?'':'display:none'}"></div>
+      <div class="ar"><select class="rb"><option value="">${t('activity')}…</option>${Object.keys(ACTS).map(g=>`<optgroup label="${esc(g)}">${ACTS[g].map(a=>`<option value="${esc(a)}" ${!aOther&&ca===a?'selected':''}>${esc(a)}</option>`).join('')}</optgroup>`).join('')}<option value="__other" ${aOther?'selected':''}>${t('other')}</option></select><input class="rbo" placeholder="${t('activity')}" value="${aOther?esc(ca):''}" style="margin-top:4px;${aOther?'':'display:none'}"></div>
+      <textarea class="rd" rows="2" placeholder="${t('details')}">${esc(r.details||'')}</textarea><input class="rc" placeholder="${t('constraint')}" value="${esc(r.constraint)}"><button class="x">×</button>`;
+      [['.ra','.ro'],['.rb','.rbo']].forEach(([a,b])=>{const sel=d.querySelector(a),oth=d.querySelector(b);sel.onchange=()=>{oth.style.display=sel.value==='__other'?'':'none';dirty=true}});
       d.querySelector('.x').onclick=()=>{if(box.children.length>1)d.remove()};box.appendChild(d)};
     rows.forEach(add);$('#ar').onclick=()=>add({area:'',activity:'',constraint:''});
-    $('#se').onclick=async()=>{const rs=[...box.children].map(d=>({area:d.querySelector('.ra').value.trim(),activity:d.querySelector('.rb').value.trim(),constraint:d.querySelector('.rc').value.trim(),lat:d._p?d._p.lat:null,lng:d._p?d._p.lng:null})).filter(r=>r.area||r.activity||r.constraint);
+    $('#se').onclick=async()=>{const rs=[...box.children].map(d=>({area:(d.querySelector('.ra').value==='__other'?d.querySelector('.ro').value.trim().toUpperCase():d.querySelector('.ra').value),activity:(d.querySelector('.rb').value==='__other'?d.querySelector('.rbo').value.trim():d.querySelector('.rb').value),details:d.querySelector('.rd').value.trim(),constraint:d.querySelector('.rc').value.trim()})).filter(r=>r.area||r.activity||r.details||r.constraint);
       const r=await post({action:'entry',id:MID,...AUTH(),name:$('#c_name').value,email:$('#c_em')?$('#c_em').value:'',rows:rs});msg(r.ok?t('saved'):(r.error||t('err')));dirty=false;load()};
   }
-  bindSign();bindPhotos();drawMap();
+  bindSign();bindPhotos();
 }
 
 /* ---------- PUBLIC ---------- */
 function publicView(){
   let h=`<div class="mut" style="margin-bottom:8px">${t('publicnote')}</div>`+stepper()+infoCard();
   if(M.status==='open')h+=`<div class="warn">${t('draft')}</div>`;
-  else h+=overview()+mapCard()+(sIdx()>=1?photosCard(false):'')+hcRead()+sigCards();
-  $('#app').innerHTML=h;bindPhotos();drawMap();
+  else h+=overview()+(sIdx()>=1?photosCard(false):'')+hcRead()+sigCards();
+  $('#app').innerHTML=h;bindPhotos();
 }
 
 /* ---------- VERIFY ---------- */
