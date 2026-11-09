@@ -75,14 +75,14 @@ canvas.pad{width:100%;height:clamp(90px,18vh,170px);border:1px dashed var(--grey
 <header>
   <img class="logo" src="logo.png" alt="EcoOils Mentari" style="height:clamp(36px,6vw,56px);width:auto;max-width:100%;display:block">
   <h1 data-t="title">SIMOPS Meeting Record</h1>
-  <div class="rt"><div class="ver">v4.6.1</div>
+  <div class="rt"><div class="ver">v4.6.2</div>
     <div class="lang"><button data-l="en">EN</button><button data-l="id">ID</button><button data-l="ms">MS</button></div></div>
 </header>
 <main id="app"></main>
 <div id="peek"><img alt=""></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
-const VERSION='4.6.1';
+const VERSION='4.6.2';
 const API_URL='https://script.google.com/macros/s/AKfycbz9C-pbRRJ0Rf1EseelBe1IGp0FkydwoIZ0e1xoBgC_Wkxl7C7dkOhFh3c9v2EczQCMCA/exec';
 const CODES=['KKS','WEN','GSB','PBS','ECO','OT1','OT2'];
 const ROLES=[...CODES,'ack','noted'];
@@ -271,13 +271,18 @@ function hostView(){
   if(M.status==='signing'&&!Object.keys(M.sign||{}).length)h+=`<button class="btn sec" data-st="discussion">${t('back')}</button>`;
   h+=`</div>`;
   if(sIdx()>=1)h+=photosCard(M.status==='discussion');
-  h+=`<div class="card"><label>${t('hc')}</label><textarea id="hc" ${dis}>${esc(M.hostc||'')}</textarea><button class="btn" id="shc" ${dis}>${t('savehc')}</button></div>`;
+  h+=`<div class="card"><label>${t('hc')}</label><textarea id="hc" ${dis}>${esc(M.hostc||'')}</textarea><button class="btn" id="shc" ${dis}>${t('savehc')}</button><button type="button" class="btn sec" id="hpol" ${dis}>✨ ${t('polish')}</button><div id="hpres"></div></div>`;
   h+=sigCards();
   if(done)h+=`<div class="card"><div class="okb">${t('done')}</div>${M.pdf?`<a class="btn" target="_blank" href="${M.pdf}">${t('pdf')}</a>`:''}<button class="btn sec" id="rs">${t('resend')}</button></div>`;
   $('#app').innerHTML=h;
   document.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>{navigator.clipboard.writeText(b.dataset.copy);b.textContent=t('copied')});
   document.querySelectorAll('[data-st]').forEach(b=>b.onclick=async()=>{const r=await post({action:'status',id:MID,ht:HT,to:b.dataset.st});if(!r.ok)msg(r.error||t('err'));load()});
   $('#sd').onclick=async()=>{const r=await post({action:'meta',id:MID,ht:HT,host:$('#d_host').value,date:$('#d_date').value,time:$('#d_time').value,hostEmails:$('#d_em').value,ackEmail:$('#d_ack').value,notedEmail:$('#d_nt').value,areas:$('#d_areas').value.split('\n').map(s=>s.trim()).filter(Boolean)});msg(r.ok?t('saved'):(r.error||t('err')));dirty=false;load()};
+  $('#hpol').onclick=async()=>{const el=$('#hc'),tx=el.value.trim(),bx=$('#hpres');if(tx.length<3){bx.innerHTML=`<div class="mut">${t('polnone')}</div>`;return}
+    bx.innerHTML=`<div class="mut">${t('polbusy')}</div>`;const r=await post({action:'polish',id:MID,ht:HT,text:tx});const ai=r.ok,neu=ai?r.text:basicFix(tx);
+    if(!neu||neu===tx){bx.innerHTML=`<div class="okb">${t('polgood')}</div>`;return}
+    bx.innerHTML=`<div class="card" style="margin:6px 0">${ai?'':`<div class="mut" style="margin-bottom:6px">${t('polbasic')}</div>`}<div class="mut">${esc(tx)}</div><div style="margin:2px 0 8px"><b>→ ${esc(neu)}</b></div><button type="button" class="btn pu">${t('poluse')}</button><button type="button" class="btn sec pk">${t('polkeep')}</button></div>`;
+    bx.querySelector('.pu').onclick=()=>{el.value=neu;dirty=true;bx.innerHTML=''};bx.querySelector('.pk').onclick=()=>{bx.innerHTML=''}};
   $('#shc').onclick=async()=>{const r=await post({action:'meta',id:MID,ht:HT,hostc:$('#hc').value});msg(r.ok?t('saved'):(r.error||t('err')));dirty=false};
   const rs=$('#rs');if(rs)rs.onclick=async()=>{const r=await post({action:'resend',id:MID,ht:HT});msg(r.ok?t('sendall'):(r.error||t('err')))};
   bindPhotos();
