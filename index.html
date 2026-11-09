@@ -2,15 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>SIMOPS Meeting Record</title>
 <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
 <style>
 :root{--red:#DD1D21;--yel:#FBCE07;--ink:#1f2933;--grey:#6b7280;--line:#d5d9de;--bg:#f5f6f7;--green:#6BB04A}
 *{box-sizing:border-box}
-body{margin:0;font-family:'Jost',Arial,sans-serif;color:var(--ink);background:var(--bg)}
-header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:14px 16px;background:#fff;border-bottom:4px solid var(--yel)}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{margin:0;overflow-x:hidden;overflow-wrap:anywhere;padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);font-family:'Jost',Arial,sans-serif;color:var(--ink);background:var(--bg)}
+header{display:flex;flex-wrap:wrap;justify-content:space-between;padding-top:max(14px,env(safe-area-inset-top))!important;align-items:flex-start;gap:12px;padding:14px 16px;background:#fff;border-bottom:4px solid var(--yel)}
 .logo{display:inline-block;text-align:center;line-height:1}
 .logo b{display:block;font-size:26px;font-weight:500;color:var(--green)}
 .logo span{display:block;background:var(--yel);color:#fff;font-size:10px;font-weight:500;padding:2px 0;margin-top:3px;text-align:justify;text-align-last:justify;letter-spacing:.2em}
@@ -18,14 +19,18 @@ h1{margin:0;font-weight:300;text-transform:uppercase;letter-spacing:.22em;color:
 .rt{text-align:right}.ver{font-size:11px;color:var(--grey);margin-bottom:3px}
 .lang button{border:1px solid var(--line);background:#fff;padding:3px 8px;font:inherit;font-size:12px;cursor:pointer;color:var(--grey)}
 .lang button.on{background:var(--red);color:#fff;border-color:var(--red)}
-main{max-width:1000px;margin:0 auto;padding:14px}
-.card{background:#fff;border:1px solid var(--line);border-radius:6px;padding:14px;margin-bottom:14px}
+main{width:100%;max-width:1000px;margin:0 auto;padding:14px}
+@media(min-width:1100px){main{max-width:1180px;padding:20px}}
+@media(min-width:1700px){main{max-width:1500px}html{font-size:17px}}
+@media(min-width:2400px){main{max-width:1900px}html{font-size:19px}}
+.card{min-width:0;overflow-x:auto;background:#fff;border:1px solid var(--line);border-radius:6px;padding:14px;margin-bottom:14px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
 label{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--grey);margin-bottom:4px}
-input,textarea,select{width:100%;font:inherit;font-size:15px;padding:8px;border:1px solid var(--line);border-radius:4px;background:#fff}
+img,canvas,video{max-width:100%}
+input,textarea,select{min-width:0;width:100%;font:inherit;font-size:15px;padding:8px;border:1px solid var(--line);border-radius:4px;background:#fff}
 textarea{min-height:80px;resize:vertical}
 h2{margin:0 0 10px;font-weight:500;font-size:17px;letter-spacing:.12em;color:var(--red)}
-.btn{font:inherit;border:0;border-radius:4px;padding:10px 16px;cursor:pointer;background:var(--red);color:#fff;letter-spacing:.05em;margin:4px 6px 4px 0;text-decoration:none;display:inline-block}
+.btn{min-height:42px;font:inherit;border:0;border-radius:4px;padding:10px 16px;cursor:pointer;background:var(--red);color:#fff;letter-spacing:.05em;margin:4px 6px 4px 0;text-decoration:none;display:inline-block}
 .btn.sec{background:#fff;color:var(--ink);border:1px solid var(--line)}
 .btn:disabled{opacity:.4}
 .steps{display:flex;gap:4px;margin-bottom:14px}
@@ -40,7 +45,7 @@ tr.bad td{background:#fff3cd}
 .mut{color:var(--grey);font-size:14px}.mono{font-family:monospace;font-size:11px;word-break:break-all;color:var(--grey)}
 .row{display:grid;grid-template-columns:1fr 1.5fr 1.5fr 44px 32px;gap:6px;margin-top:6px}
 .x{border:0;background:none;color:var(--red);font-size:20px;cursor:pointer}
-canvas.pad{width:100%;height:90px;border:1px dashed var(--grey);border-radius:4px;background:#fafafa;touch-action:none}
+canvas.pad{width:100%;height:clamp(90px,18vh,170px);border:1px dashed var(--grey);border-radius:4px;background:#fafafa;touch-action:none}
 .sigimg{height:50px;display:block}
 .link{font-size:12px;word-break:break-all;color:var(--grey)}
 .lk{padding:8px 0;border-bottom:1px solid var(--line)}
@@ -50,18 +55,26 @@ canvas.pad{width:100%;height:90px;border:1px dashed var(--grey);border-radius:4p
 #peek{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9;align-items:center;justify-content:center}
 #peek img{max-width:94vw;max-height:90vh}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10;display:flex;align-items:center;justify-content:center}
-.mbox{background:#fff;width:min(900px,96vw);border-radius:6px;overflow:hidden}
+.mbox{background:#fff;width:min(900px,96vw);max-height:96vh;max-height:96dvh;overflow-y:auto;border-radius:6px}
 .tag{display:inline-block;font-size:11px;padding:2px 6px;border-radius:3px;background:#e9ebee;margin-left:6px;text-transform:uppercase;letter-spacing:.06em}
 .tag.ok{background:var(--green);color:#fff}
 .pinb{border:1px solid var(--line);background:#fff;border-radius:4px;cursor:pointer;font-size:16px}.pinb.set{background:var(--green);color:#fff}
-@media(max-width:640px){.row{grid-template-columns:1fr 44px 32px}.row input{grid-column:1/-1}}
+@media(max-width:640px){.row{grid-template-columns:1fr 44px 32px}.row input{grid-column:1/-1}
+ input,textarea,select{font-size:16px}
+ header{padding:10px 12px}.logo{max-width:44vw}h1{order:3;flex:1 0 100%;letter-spacing:.14em}
+ .btn{width:100%;text-align:center;margin-right:0}
+ .steps div{font-size:10px;letter-spacing:.03em}
+ table{font-size:13px}th,td{padding:4px}
+ main{padding:10px}.card{padding:12px}}
+@media(max-width:380px){.steps div{font-size:9px}h2{letter-spacing:.06em}}
+@media(max-height:480px) and (orientation:landscape){#pm{height:55vh!important}#map{height:300px!important}}
 </style>
 </head>
 <body>
 <header>
-  <img class="logo" src="logo.png" alt="EcoOils Mentari" style="height:48px;width:auto;display:block">
+  <img class="logo" src="logo.png" alt="EcoOils Mentari" style="height:clamp(36px,6vw,56px);width:auto;max-width:100%;display:block">
   <h1 data-t="title">SIMOPS Meeting Record</h1>
-  <div class="rt"><div class="ver">v4.2.0</div>
+  <div class="rt"><div class="ver">v4.2.1</div>
     <div class="lang"><button data-l="en">EN</button><button data-l="id">ID</button><button data-l="ms">MS</button></div></div>
 </header>
 <main id="app"></main>
@@ -69,7 +82,7 @@ canvas.pad{width:100%;height:90px;border:1px dashed var(--grey);border-radius:4p
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
-const VERSION='4.2.0';
+const VERSION='4.2.1';
 const API_URL='https://script.google.com/macros/s/AKfycbz9C-pbRRJ0Rf1EseelBe1IGp0FkydwoIZ0e1xoBgC_Wkxl7C7dkOhFh3c9v2EczQCMCA/exec';
 const CODES=['KKS','WEN','GSB','PBS','ECO'];
 const ROLES=[...CODES,'ack','noted'];
@@ -137,7 +150,7 @@ function overview(){
     h+=`<div class="card"><h2 style="border-left:6px solid ${COLORS[c]};padding-left:8px">${RN(c)}${rows.length?`<span class="tag ok">${t('entered')}</span>`:''}</h2>`+(rows.length?`<table><tr><th>${t('area')}</th><th>${t('activity')}</th><th>${t('constraint')}</th></tr>`+rows.map((r,i)=>`<tr class="${bad.has(c+'#'+i)?'bad':''}"><td>${esc(r.area)}${r.lat!=null?' 📍':''}</td><td>${esc(r.activity)}</td><td>${esc(r.constraint)}</td></tr>`).join('')+'</table>':`<div class="mut">${t('none')}</div>`)+sigLine(c)+'</div>'});
   return h;
 }
-function mapCard(){return `<div class="card"><h2>${t('mapT')}</h2><div id="map" style="height:380px;border-radius:4px"></div><div class="mut" style="margin-top:6px">${CODES.map(c=>`<span style="color:${COLORS[c]}">●</span> ${RN(c)}`).join(' &nbsp; ')} &nbsp; <span style="color:#DD1D21">◎</span> ${t('clash')}</div></div>`}
+function mapCard(){return `<div class="card"><h2>${t('mapT')}</h2><div id="map" style="height:clamp(280px,48vh,620px);border-radius:4px"></div><div class="mut" style="margin-top:6px">${CODES.map(c=>`<span style="color:${COLORS[c]}">●</span> ${RN(c)}`).join(' &nbsp; ')} &nbsp; <span style="color:#DD1D21">◎</span> ${t('clash')}</div></div>`}
 function layers(m){
   const sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Esri'});
   const osm=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'});
@@ -159,7 +172,7 @@ function drawMap(){
 }
 function pickPin(initial,cb){
   const ov=document.createElement('div');ov.className='modal';
-  ov.innerHTML=`<div class="mbox"><div id="pm" style="height:60vh"></div><div style="padding:8px"><span class="mut">${t('pinnote')}</span><br><button class="btn sec" id="pgps">${t('gps')}</button><button class="btn" id="pok">OK</button><button class="btn sec" id="pcx">✕</button></div></div>`;
+  ov.innerHTML=`<div class="mbox"><div id="pm" style="height:clamp(260px,58vh,640px)"></div><div style="padding:8px"><span class="mut">${t('pinnote')}</span><br><button class="btn sec" id="pgps">${t('gps')}</button><button class="btn" id="pok">OK</button><button class="btn sec" id="pcx">✕</button></div></div>`;
   document.body.appendChild(ov);
   const m=L.map('pm').setView(initial?[initial.lat,initial.lng]:CENTER,17);layers(m);
   let cur=initial||null,mk=initial?L.marker([initial.lat,initial.lng]).addTo(m):null;
