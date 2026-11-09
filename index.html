@@ -75,14 +75,14 @@ canvas.pad{width:100%;height:clamp(90px,18vh,170px);border:1px dashed var(--grey
 <header>
   <img class="logo" src="logo.png" alt="EcoOils Mentari" style="height:clamp(36px,6vw,56px);width:auto;max-width:100%;display:block">
   <h1 data-t="title">SIMOPS Meeting Record</h1>
-  <div class="rt"><div class="ver">v4.6.3</div>
+  <div class="rt"><div class="ver">v4.6.4</div>
     <div class="lang"><button data-l="en">EN</button><button data-l="id">ID</button><button data-l="ms">MS</button></div></div>
 </header>
 <main id="app"></main>
 <div id="peek"><img alt=""></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
-const VERSION='4.6.3';
+const VERSION='4.6.4';
 const API_URL='https://script.google.com/macros/s/AKfycbz9C-pbRRJ0Rf1EseelBe1IGp0FkydwoIZ0e1xoBgC_Wkxl7C7dkOhFh3c9v2EczQCMCA/exec';
 const CODES=['KKS','WEN','GSB','PBS','ECO','OT1','OT2'];
 const ROLES=[...CODES,'ack','noted'];
@@ -280,7 +280,7 @@ function hostView(){
   $('#sd').onclick=async()=>{const r=await post({action:'meta',id:MID,ht:HT,host:$('#d_host').value,date:$('#d_date').value,time:$('#d_time').value,hostEmails:$('#d_em').value,ackEmail:$('#d_ack').value,notedEmail:$('#d_nt').value,areas:$('#d_areas').value.split('\n').map(s=>s.trim()).filter(Boolean)});msg(r.ok?t('saved'):(r.error||t('err')));dirty=false;load()};
   $('#hreg').onclick=()=>regFix([$('#hc')],$('#hpres'));
   $('#hpol').onclick=async()=>{const el=$('#hc'),tx=el.value.trim(),bx=$('#hpres');if(tx.length<3){bx.innerHTML=`<div class="mut">${t('polnone')}</div>`;return}
-    bx.innerHTML=`<div class="mut">${t('polbusy')}</div>`;const r=await post({action:'polish',id:MID,ht:HT,text:tx});const ai=r.ok,neu=ai?r.text:basicFix(tx);
+    bx.innerHTML=`<div class="mut">${t('polbusy')}</div>`;const r=await Promise.race([post({action:'polish',id:MID,ht:HT,texts:[tx]}),new Promise(res=>setTimeout(()=>res({ok:false}),12000))]);const ai=!!(r&&r.ok&&r.texts&&r.texts[0]),neu=ai?r.texts[0]:basicFix(tx);
     if(!neu||neu===tx){bx.innerHTML=`<div class="okb">${t('polgood')}</div>`;return}
     bx.innerHTML=`<div class="card" style="margin:6px 0">${ai?'':`<div class="mut" style="margin-bottom:6px">${t('polbasic')}</div>`}<div class="mut">${esc(tx)}</div><div style="margin:2px 0 8px"><b>→ ${esc(neu)}</b></div><button type="button" class="btn pu">${t('poluse')}</button><button type="button" class="btn sec pk">${t('polkeep')}</button></div>`;
     bx.querySelector('.pu').onclick=()=>{el.value=neu;dirty=true;bx.innerHTML=''};bx.querySelector('.pk').onclick=()=>{bx.innerHTML=''}};
@@ -320,8 +320,8 @@ async function polishRow(d){
   if(!items.length){box.innerHTML=`<div class="mut">${t('polnone')}</div>`;return}
   btn.disabled=true;box.innerHTML=`<div class="mut">${t('polbusy')}</div>`;
   const out=[];let basic=false;
-  for(const it of items){const r=await post({action:'polish',id:MID,...AUTH(),text:it.text});
-    if(r.ok){out.push({el:it.el,old:it.text,neu:r.text})}else{basic=true;out.push({el:it.el,old:it.text,neu:basicFix(it.text)})}}
+  const r=await Promise.race([post({action:'polish',id:MID,...AUTH(),texts:items.map(x=>x.text)}),new Promise(res=>setTimeout(()=>res({ok:false,timeout:true}),12000))]);
+  items.forEach((it,i)=>{if(r&&r.ok&&r.texts&&r.texts[i])out.push({el:it.el,old:it.text,neu:r.texts[i]});else{basic=true;out.push({el:it.el,old:it.text,neu:basicFix(it.text)})}});
   btn.disabled=false;
   const ch=out.filter(x=>x.neu&&x.neu!==x.old);
   if(!ch.length){box.innerHTML=`<div class="okb">${t('polgood')}</div>`;return}
