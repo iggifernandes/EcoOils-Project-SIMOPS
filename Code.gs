@@ -1,4 +1,4 @@
-// VERSION: 4.4.0 - SIMOPS Meeting Record backend (single sign-in with per-party PIN set by email code, public record, email-OTP signatures, tamper-evident seal, map)
+// VERSION: 4.5.0 - SIMOPS Meeting Record backend (single sign-in with per-party PIN set by email code, public record, email-OTP signatures, tamper-evident seal, map)
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > put the HSSE host email(s) in HOST_EMAILS below >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -161,7 +161,7 @@ function doGet(e) {
     const items = rows.filter(function (r) { return r[4] !== 'open'; }).reverse().slice(0, 60).map(function (r) { return { id: r[0], date: r[1], time: r[2], host: r[3], status: r[4], parties: r[5], clashes: r[6] }; });
     return out_({ ok: true, items: items });
   }
-  return out_({ ok: true, version: '4.4.0' });
+  return out_({ ok: true, version: '4.5.0' });
 }
 
 function doPost(e) {
@@ -310,6 +310,36 @@ function handle_(b) {
   if (!m) return { ok: false, error: 'not found' };
   const isHost = !!(b.ht && b.ht === m.ht);
   if (b.action === 'get') return view_(m, b);
+  // ----- AI wording check (free Gemini tier; key lives in Script Properties as GEMINI_API_KEY, never in code) -----
+  if (b.action === 'polish') {
+    if (!(isHost || roleAuth_(m, b))) return { ok: false, error: 'invalid sign-in' };
+    if (m.status !== 'open' && !isHost) return { ok: false, error: 'entries are locked' };
+    const key = props_().getProperty('GEMINI_API_KEY');
+    if (!key) return { ok: false, error: 'AI wording check is not set up yet (ask HSSE)' };
+    const txt = String(b.text || '').trim().slice(0, 600);
+    if (txt.length < 3) return { ok: true, text: txt };
+    const cache = CacheService.getScriptCache(), rk = 'pol:' + (b.c || 'host') + ':' + Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyyMMddHH');
+    const used = parseInt(cache.get(rk) || '0', 10);
+    if (used >= 40) return { ok: false, error: 'limit reached for this hour, try again later' };
+    cache.put(rk, String(used + 1), 3600);
+    const model = props_().getProperty('GEMINI_MODEL') || 'gemini-2.0-flash';
+    const prompt = 'You edit short notes written by construction site contractors for a SIMOPS (simultaneous operations) meeting record. ' +
+      'Rewrite the note below as clear, correct, professional sentence(s). Keep the same language as the note (English, Bahasa Indonesia or Bahasa Malaysia). ' +
+      'Keep the meaning exactly. Do not add facts, names, numbers, times or equipment that are not in the note. Keep it short. Output only the rewritten text, nothing else.\n\nNote:\n' + txt;
+    let res;
+    try {
+      res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent', {
+        method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+        headers: { 'x-goog-api-key': key },
+        payload: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, maxOutputTokens: 300 } })
+      });
+    } catch (err) { return { ok: false, error: 'AI service not reachable' }; }
+    if (res.getResponseCode() !== 200) return { ok: false, error: 'AI service busy, try again later' };
+    let out = '';
+    try { out = JSON.parse(res.getContentText()).candidates[0].content.parts[0].text; } catch (err) { return { ok: false, error: 'AI gave no answer' }; }
+    out = String(out || '').trim().replace(/^["\s]+|["\s]+$/g, '').slice(0, 800);
+    return out ? { ok: true, text: out } : { ok: false, error: 'AI gave no answer' };
+  }
 
   if (b.action === 'meta') {
     if (!isHost) return { ok: false, error: 'host only' };
