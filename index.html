@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SIMOPS Meeting Record</title>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<style>
+:root{--red:#DD1D21;--yel:#FBCE07;--ink:#1f2933;--grey:#6b7280;--line:#d5d9de;--bg:#f5f6f7;--green:#6BB04A}
+*{box-sizing:border-box}
+body{margin:0;font-family:'Jost',Arial,sans-serif;color:var(--ink);background:var(--bg)}
+header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:14px 16px;background:#fff;border-bottom:4px solid var(--yel)}
+.logo{display:inline-block;text-align:center;line-height:1}
+.logo b{display:block;font-size:26px;font-weight:500;color:var(--green)}
+.logo span{display:block;background:var(--yel);color:#fff;font-size:10px;font-weight:500;padding:2px 0;margin-top:3px;text-align:justify;text-align-last:justify;letter-spacing:.2em}
+h1{margin:0;font-weight:300;text-transform:uppercase;letter-spacing:.22em;color:var(--grey);font-size:clamp(15px,3.5vw,26px);text-align:center;flex:1;align-self:center}
+.rt{text-align:right}.ver{font-size:11px;color:var(--grey);margin-bottom:3px}
+.lang button{border:1px solid var(--line);background:#fff;padding:3px 8px;font:inherit;font-size:12px;cursor:pointer;color:var(--grey)}
+.lang button.on{background:var(--red);color:#fff;border-color:var(--red)}
+main{max-width:1000px;margin:0 auto;padding:14px}
+.card{background:#fff;border:1px solid var(--line);border-radius:6px;padding:14px;margin-bottom:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+label{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--grey);margin-bottom:4px}
+input,textarea{width:100%;font:inherit;font-size:15px;padding:8px;border:1px solid var(--line);border-radius:4px;background:#fff}
+textarea{min-height:80px;resize:vertical}
+h2{margin:0 0 10px;font-weight:500;font-size:17px;letter-spacing:.12em;color:var(--red)}
+.btn{font:inherit;border:0;border-radius:4px;padding:10px 16px;cursor:pointer;background:var(--red);color:#fff;letter-spacing:.05em;margin:4px 6px 4px 0;text-decoration:none;display:inline-block}
+.btn.sec{background:#fff;color:var(--ink);border:1px solid var(--line)}
+.btn:disabled{opacity:.4}
+.steps{display:flex;gap:4px;margin-bottom:14px}
+.steps div{flex:1;text-align:center;font-size:12px;text-transform:uppercase;letter-spacing:.08em;padding:8px 2px;background:#e9ebee;color:var(--grey)}
+.steps div.on{background:var(--yel);color:var(--ink);font-weight:500}.steps div.past{background:var(--ink);color:#fff}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{border:1px solid var(--line);padding:6px;text-align:left;vertical-align:top}th{background:#eceef0;font-weight:500}
+tr.bad td{background:#fff3cd}
+.warn{background:#fff3cd;border-left:5px solid var(--yel);padding:10px 12px;margin-bottom:14px;font-size:14px}
+.okb{background:#e6f4e0;border-left:5px solid var(--green);padding:10px 12px;margin-bottom:14px;font-size:14px}
+.badb{background:#fde4e4;border-left:5px solid var(--red);padding:10px 12px;margin-bottom:14px;font-size:14px}
+.mut{color:var(--grey);font-size:14px}.mono{font-family:monospace;font-size:11px;word-break:break-all;color:var(--grey)}
+.row{display:grid;grid-template-columns:1fr 1.5fr 1.5fr 44px 32px;gap:6px;margin-top:6px}
+.x{border:0;background:none;color:var(--red);font-size:20px;cursor:pointer}
+canvas.pad{width:100%;height:90px;border:1px dashed var(--grey);border-radius:4px;background:#fafafa;touch-action:none}
+.sigimg{height:50px;display:block}
+.link{font-size:12px;word-break:break-all;color:var(--grey)}
+.lk{padding:8px 0;border-bottom:1px solid var(--line)}
+.drop{border:2px dashed var(--line);padding:14px;text-align:center;color:var(--grey);border-radius:6px}
+.drop.over{border-color:var(--red)}
+.thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.thumbs img{height:80px;border-radius:4px;cursor:pointer}
+#peek{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9;align-items:center;justify-content:center}
+#peek img{max-width:94vw;max-height:90vh}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10;display:flex;align-items:center;justify-content:center}
+.mbox{background:#fff;width:min(900px,96vw);border-radius:6px;overflow:hidden}
+.tag{display:inline-block;font-size:11px;padding:2px 6px;border-radius:3px;background:#e9ebee;margin-left:6px;text-transform:uppercase;letter-spacing:.06em}
+.tag.ok{background:var(--green);color:#fff}
+.pinb{border:1px solid var(--line);background:#fff;border-radius:4px;cursor:pointer;font-size:16px}.pinb.set{background:var(--green);color:#fff}
+@media(max-width:640px){.row{grid-template-columns:1fr 44px 32px}.row input{grid-column:1/-1}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><b>EcoOils</b><span>PROJECT</span></div>
+  <h1 data-t="title">SIMOPS Meeting Record</h1>
+  <div class="rt"><div class="ver">v3.0.1</div>
+    <div class="lang"><button data-l="en">EN</button><button data-l="id">ID</button><button data-l="ms">MS</button></div></div>
+</header>
+<main id="app"></main>
+<div id="peek"><img alt=""></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+const VERSION='3.0.1';
+const API_URL='https://script.google.com/macros/s/AKfycbz9C-pbRRJ0Rf1EseelBe1IGp0FkydwoIZ0e1xoBgC_Wkxl7C7dkOhFh3c9v2EczQCMCA/exec';
+const CODES=['KKS','WEN','GSB','PBS','ECO'];
+const ROLES=[...CODES,'ack','noted'];
+const NAME={KKS:'KKS',WEN:'WEN',GSB:'GSB',PBS:'PBS',ECO:'EcoOils'};
+const COLORS={KKS:'#2563eb',WEN:'#16a34a',GSB:'#f59e0b',PBS:'#9333ea',ECO:'#0891b2'};
+const CENTER=[3.1417,99.2931]; // Sei Mangkei SEZ - check on first use
+const DEF_AREAS=['DTP Building','WTP Area','Silo Tank Area','MCC Room','PTU','North-East Area','South Area'];
+const STAT=['open','discussion','signing','done'];
+const T={
+en:{title:'SIMOPS Meeting Record',newm:'New SIMOPS meeting',host:'Host',date:'Date',time:'Time',hem:'Host email(s) to receive the PDF (comma separated)',create:'Create meeting and open entry',mine:'My meetings',open:'Open',s_open:'Entry',s_discussion:'Discussion',s_signing:'Signing',s_done:'Completed',savedet:'Save details',links:'Links to send (public link, then each party)',publ:'Public read-only link',copy:'Copy',copied:'Copied',wa:'WhatsApp',areas:'Site areas (one per line)',area:'Area / Location',activity:'Planned activity',constraint:'Agreed constraint',addrow:'+ Add activity',saveentry:'Save my entries',cname:'Your name',cemail:'Your email (a code is sent here to verify your signature)',saved:'Saved',clash:'Possible clashes',clashM:'Clash distance between pins (metres)',fix:'Fix details and start discussion',reopen:'Reopen entries',tosign:'Lock record and start signing',back:'Back to discussion',photos:'Meeting photo',drop:'Drop photo here or tap +',hc:'Host Comments',savehc:'Save comments',signhere:'Sign here',name:'Name',signed:'Signed',ack:'Acknowledged (EcoOils Construction Representative)',noted:'Noted (EcoOils HSSE)',ackS:'Acknowledged',notedS:'Noted',ackem:'Acknowledged: email of EcoOils Construction Representative',notedem:'Noted: email of EcoOils HSSE',pdf:'Open PDF',resend:'Send PDF again',refresh:'Refresh',noapi:'Setup needed: paste the Apps Script web app URL into API_URL in index.html.',bad:'Invalid or missing link.',none:'Not entered yet',entered:'Entered',locked:'Entries are locked.',needsign:'Waiting for signature',done:'All parties signed. PDF generated and emailed.',clear:'Clear',err:'Error',sendall:'Sent to all recipients',mapT:'Activity map',pin:'Pin',gps:'Use my GPS',pinnote:'Tap the map to place the pin',register:'Meeting register',hostlogin:'Host login',email:'Email',sendcode:'Send verification code',code:'6-digit code',login:'Login',logout:'Logout',codesent:'Code sent to',otpnote:'Your signature is verified by a one-time code sent to your registered email, and sealed to the record content.',confirmsign:'Confirm code and sign',verify:'Verify this record',vvalid:'VALID: the record is unchanged since it was signed.',vbad:'NOT VALID: the record or a signature does not match the sealed hash.',method:'Method',publicnote:'Read-only public view',sealed:'Record sealed',notsealed:'This record is not sealed yet (signing has not started).',noreg:'No meetings yet',draft:'Entries are still being collected.',hash:'Content hash',seal:'Seal',signers:'Signers',nosess:'Login expired, please login again.'},
+id:{title:'Catatan Rapat SIMOPS',newm:'Rapat SIMOPS baru',host:'Tuan Rumah',date:'Tanggal',time:'Waktu',hem:'Email tuan rumah penerima PDF (pisahkan koma)',create:'Buat rapat dan buka pengisian',mine:'Rapat saya',open:'Buka',s_open:'Pengisian',s_discussion:'Diskusi',s_signing:'Tanda tangan',s_done:'Selesai',savedet:'Simpan detail',links:'Tautan untuk dikirim (tautan publik, lalu tiap pihak)',publ:'Tautan publik (hanya baca)',copy:'Salin',copied:'Tersalin',wa:'WhatsApp',areas:'Area lokasi (satu per baris)',area:'Area / Lokasi',activity:'Rencana kegiatan',constraint:'Kendala yang disepakati',addrow:'+ Tambah kegiatan',saveentry:'Simpan isian saya',cname:'Nama Anda',cemail:'Email Anda (kode dikirim ke sini untuk verifikasi tanda tangan)',saved:'Tersimpan',clash:'Kemungkinan bentrok',clashM:'Jarak bentrok antar pin (meter)',fix:'Tetapkan detail dan mulai diskusi',reopen:'Buka kembali pengisian',tosign:'Kunci catatan dan mulai tanda tangan',back:'Kembali ke diskusi',photos:'Foto rapat',drop:'Taruh foto di sini atau ketuk +',hc:'Komentar Tuan Rumah',savehc:'Simpan komentar',signhere:'Tanda tangan di sini',name:'Nama',signed:'Sudah tanda tangan',ack:'Mengetahui (Perwakilan Konstruksi EcoOils)',noted:'Dicatat (HSSE EcoOils)',ackS:'Mengetahui',notedS:'Dicatat',ackem:'Mengetahui: email Perwakilan Konstruksi EcoOils',notedem:'Dicatat: email HSSE EcoOils',pdf:'Buka PDF',resend:'Kirim PDF lagi',refresh:'Segarkan',noapi:'Perlu pengaturan: tempel URL web app Apps Script ke API_URL di index.html.',bad:'Tautan tidak valid.',none:'Belum diisi',entered:'Sudah diisi',locked:'Isian dikunci.',needsign:'Menunggu tanda tangan',done:'Semua pihak sudah tanda tangan. PDF dibuat dan dikirim lewat email.',clear:'Hapus',err:'Kesalahan',sendall:'Terkirim ke semua penerima',mapT:'Peta kegiatan',pin:'Pin',gps:'Pakai GPS saya',pinnote:'Ketuk peta untuk menaruh pin',register:'Daftar rapat',hostlogin:'Login tuan rumah',email:'Email',sendcode:'Kirim kode verifikasi',code:'Kode 6 digit',login:'Masuk',logout:'Keluar',codesent:'Kode dikirim ke',otpnote:'Tanda tangan Anda diverifikasi dengan kode sekali pakai ke email terdaftar, dan disegel ke isi catatan.',confirmsign:'Konfirmasi kode dan tanda tangan',verify:'Verifikasi catatan ini',vvalid:'VALID: catatan tidak berubah sejak ditandatangani.',vbad:'TIDAK VALID: catatan atau tanda tangan tidak cocok dengan hash tersegel.',method:'Metode',publicnote:'Tampilan publik (hanya baca)',sealed:'Catatan tersegel',notsealed:'Catatan belum disegel (tanda tangan belum dimulai).',noreg:'Belum ada rapat',draft:'Isian masih dikumpulkan.',hash:'Hash isi',seal:'Segel',signers:'Penanda tangan',nosess:'Login kedaluwarsa, silakan masuk lagi.'},
+ms:{title:'Rekod Mesyuarat SIMOPS',newm:'Mesyuarat SIMOPS baharu',host:'Tuan Rumah',date:'Tarikh',time:'Masa',hem:'E-mel tuan rumah penerima PDF (asing dengan koma)',create:'Cipta mesyuarat dan buka pengisian',mine:'Mesyuarat saya',open:'Buka',s_open:'Pengisian',s_discussion:'Perbincangan',s_signing:'Tandatangan',s_done:'Selesai',savedet:'Simpan butiran',links:'Pautan untuk dihantar (pautan awam, kemudian setiap pihak)',publ:'Pautan awam (baca sahaja)',copy:'Salin',copied:'Disalin',wa:'WhatsApp',areas:'Kawasan tapak (satu setiap baris)',area:'Kawasan / Lokasi',activity:'Aktiviti dirancang',constraint:'Kekangan dipersetujui',addrow:'+ Tambah aktiviti',saveentry:'Simpan isian saya',cname:'Nama anda',cemail:'E-mel anda (kod dihantar ke sini untuk mengesahkan tandatangan)',saved:'Disimpan',clash:'Kemungkinan bertembung',clashM:'Jarak bertembung antara pin (meter)',fix:'Tetapkan butiran dan mulakan perbincangan',reopen:'Buka semula pengisian',tosign:'Kunci rekod dan mulakan tandatangan',back:'Kembali ke perbincangan',photos:'Foto mesyuarat',drop:'Letak foto di sini atau tekan +',hc:'Komen Tuan Rumah',savehc:'Simpan komen',signhere:'Tandatangan di sini',name:'Nama',signed:'Telah tandatangan',ack:'Diakui (Wakil Pembinaan EcoOils)',noted:'Dicatat (HSSE EcoOils)',ackS:'Diakui',notedS:'Dicatat',ackem:'Diakui: e-mel Wakil Pembinaan EcoOils',notedem:'Dicatat: e-mel HSSE EcoOils',pdf:'Buka PDF',resend:'Hantar PDF semula',refresh:'Muat semula',noapi:'Perlu persediaan: tampal URL web app Apps Script ke API_URL dalam index.html.',bad:'Pautan tidak sah.',none:'Belum diisi',entered:'Telah diisi',locked:'Isian dikunci.',needsign:'Menunggu tandatangan',done:'Semua pihak telah tandatangan. PDF dijana dan dihantar melalui e-mel.',clear:'Padam',err:'Ralat',sendall:'Dihantar kepada semua penerima',mapT:'Peta aktiviti',pin:'Pin',gps:'Guna GPS saya',pinnote:'Tekan peta untuk letak pin',register:'Daftar mesyuarat',hostlogin:'Log masuk tuan rumah',email:'E-mel',sendcode:'Hantar kod pengesahan',code:'Kod 6 digit',login:'Log masuk',logout:'Log keluar',codesent:'Kod dihantar ke',otpnote:'Tandatangan anda disahkan dengan kod sekali guna ke e-mel berdaftar, dan dimeterai pada kandungan rekod.',confirmsign:'Sahkan kod dan tandatangan',verify:'Sahkan rekod ini',vvalid:'SAH: rekod tidak berubah sejak ditandatangani.',vbad:'TIDAK SAH: rekod atau tandatangan tidak sepadan dengan hash termeterai.',method:'Kaedah',publicnote:'Paparan awam (baca sahaja)',sealed:'Rekod dimeterai',notsealed:'Rekod belum dimeterai (tandatangan belum bermula).',noreg:'Tiada mesyuarat lagi',draft:'Isian masih dikumpul.',hash:'Hash kandungan',seal:'Meterai',signers:'Penandatangan',nosess:'Log masuk tamat, sila log masuk semula.'}};
+let lang=localStorage.simopsLang||'en';
+const t=k=>(T[lang]&&T[lang][k])||T.en[k]||k;
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const q=new URLSearchParams(location.search);
+const MID=q.get('m'),HT=q.get('ht'),CC=q.get('c'),TK=q.get('t'),VID=q.get('v');
+const BASE=location.origin+location.pathname;
+const RN=c=>c==='ack'?t('ackS'):c==='noted'?t('notedS'):NAME[c];
+let M=null,role=null,dirty=false,MAP=null;
+
+async function post(b){const r=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(b)});return r.json()}
+async function get(p){const r=await fetch(API_URL+'?'+new URLSearchParams(p));return r.json()}
+const msg=s=>alert(s);
+
+/* ---------- helpers ---------- */
+function pad(c){
+  const x=c.getContext('2d'),r=c.getBoundingClientRect();c.width=r.width*2;c.height=r.height*2;x.scale(2,2);x.lineWidth=2;x.lineCap='round';x.strokeStyle='#111';
+  let on=false,d=false;const p=e=>{const b=c.getBoundingClientRect();return[e.clientX-b.left,e.clientY-b.top]};
+  c.onpointerdown=e=>{on=true;dirty=true;c.setPointerCapture(e.pointerId);x.beginPath();x.moveTo(...p(e))};
+  c.onpointermove=e=>{if(on){d=true;x.lineTo(...p(e));x.stroke()}};c.onpointerup=()=>{on=false};
+  c.clr=()=>{x.clearRect(0,0,c.width,c.height);d=false};c.has=()=>d;
+}
+function lowres(f){return new Promise(res=>{const i=new Image(),u=URL.createObjectURL(f);i.onload=()=>{const s=Math.min(1,800/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=i.width*s;c.height=i.height*s;c.getContext('2d').drawImage(i,0,0,c.width,c.height);URL.revokeObjectURL(u);res(c.toDataURL('image/jpeg',.55))};i.src=u})}
+function hav(a,b){const R=6371000,r=x=>x*Math.PI/180,dl=r(b.lat-a.lat),dg=r(b.lng-a.lng),s=Math.sin(dl/2)**2+Math.cos(r(a.lat))*Math.cos(r(b.lat))*Math.sin(dg/2)**2;return 2*R*Math.asin(Math.sqrt(s))}
+function clashList(m){
+  const rs=[],out=[],lim=m.clashM||50;
+  CODES.forEach(c=>((m.con[c]&&m.con[c].rows)||[]).forEach((r,i)=>rs.push({c,i,r,key:c+'#'+i})));
+  for(let x=0;x<rs.length;x++)for(let y=x+1;y<rs.length;y++){
+    const A=rs[x],B=rs[y];if(A.c===B.c)continue;let why='';
+    const ka=(A.r.area||'').trim().toLowerCase(),kb=(B.r.area||'').trim().toLowerCase();
+    if(ka&&ka===kb)why='area';
+    if(A.r.lat!=null&&B.r.lat!=null){const d=hav(A.r,B.r);if(d<=lim)why+=(why?' + ':'')+Math.round(d)+' m'}
+    if(why)out.push({a:A,b:B,why});
+  }
+  return out;
+}
+const sIdx=()=>STAT.indexOf(M.status);
+const REQ=()=>[...(M.parts||[]),'ack','noted'];
+
+/* ---------- shared blocks ---------- */
+const stepper=()=>`<div class="steps">${STAT.map((s,i)=>`<div class="${i===sIdx()?'on':i<sIdx()?'past':''}">${t('s_'+s)}</div>`).join('')}</div>`;
+const infoCard=()=>`<div class="card"><div class="grid"><div><label>${t('host')}</label>${esc(M.host)}</div><div><label>${t('date')}</label>${esc(M.date)}</div><div><label>${t('time')}</label>${esc(M.time)}</div></div><button class="btn sec" onclick="load()">${t('refresh')}</button>${M.H?`<a class="btn sec" href="${BASE}?v=${M.id}">${t('verify')}</a>`:''}</div>`;
+function sigLine(k){const s=M.sign&&M.sign[k];return s?`<div style="margin-top:8px"><span class="tag ok">${t('signed')}</span> ${esc(s.name)} <span class="mut">${esc(s.at)} · ${esc(s.method)} · ${esc(s.email)}</span><img class="sigimg" src="${s.sign}"></div>`:(M.status==='signing'&&REQ().includes(k)?`<div class="mut" style="margin-top:8px">${t('needsign')}</div>`:'')}
+function overview(){
+  const cl=clashList(M),bad=new Set();cl.forEach(x=>{bad.add(x.a.key);bad.add(x.b.key)});
+  let h=cl.length?`<div class="warn"><b>${t('clash')}</b>${cl.map(x=>`<div>${RN(x.a.c)}: ${esc(x.a.r.activity)} ↔ ${RN(x.b.c)}: ${esc(x.b.r.activity)} — ${esc(x.why)}</div>`).join('')}</div>`:'';
+  CODES.forEach(c=>{const rows=(M.con[c]&&M.con[c].rows)||[];
+    h+=`<div class="card"><h2 style="border-left:6px solid ${COLORS[c]};padding-left:8px">${RN(c)}${rows.length?`<span class="tag ok">${t('entered')}</span>`:''}</h2>`+(rows.length?`<table><tr><th>${t('area')}</th><th>${t('activity')}</th><th>${t('constraint')}</th></tr>`+rows.map((r,i)=>`<tr class="${bad.has(c+'#'+i)?'bad':''}"><td>${esc(r.area)}${r.lat!=null?' 📍':''}</td><td>${esc(r.activity)}</td><td>${esc(r.constraint)}</td></tr>`).join('')+'</table>':`<div class="mut">${t('none')}</div>`)+sigLine(c)+'</div>'});
+  return h;
+}
+function mapCard(){return `<div class="card"><h2>${t('mapT')}</h2><div id="map" style="height:380px;border-radius:4px"></div><div class="mut" style="margin-top:6px">${CODES.map(c=>`<span style="color:${COLORS[c]}">●</span> ${RN(c)}`).join(' &nbsp; ')} &nbsp; <span style="color:#DD1D21">◎</span> ${t('clash')}</div></div>`}
+function layers(m){
+  const sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Esri'});
+  const osm=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'});
+  sat.addTo(m);L.control.layers({Satellite:sat,Street:osm}).addTo(m);
+}
+function drawMap(){
+  const el=$('#map');if(!el||!window.L)return;
+  if(MAP){MAP.remove();MAP=null}
+  MAP=L.map(el).setView(CENTER,16);layers(MAP);
+  const cl=clashList(M),bad=new Set();cl.forEach(x=>{bad.add(x.a.key);bad.add(x.b.key)});
+  const pts=[];
+  CODES.forEach(c=>((M.con[c]&&M.con[c].rows)||[]).forEach((r,i)=>{
+    if(r.lat==null)return;const b=bad.has(c+'#'+i);pts.push([r.lat,r.lng]);
+    if(b)L.circle([r.lat,r.lng],{radius:(M.clashM||50)/2,color:'#DD1D21',weight:1,fillOpacity:.1}).addTo(MAP);
+    L.circleMarker([r.lat,r.lng],{radius:9,color:b?'#DD1D21':'#fff',weight:b?4:2,fillColor:COLORS[c],fillOpacity:.95}).addTo(MAP)
+      .bindPopup(`<b>${RN(c)}</b><br>${esc(r.activity)}<br>${esc(r.area)}<br><i>${esc(r.constraint)}</i>`);
+  }));
+  if(pts.length)MAP.fitBounds(pts,{maxZoom:18,padding:[30,30]});
+}
+function pickPin(initial,cb){
+  const ov=document.createElement('div');ov.className='modal';
+  ov.innerHTML=`<div class="mbox"><div id="pm" style="height:60vh"></div><div style="padding:8px"><span class="mut">${t('pinnote')}</span><br><button class="btn sec" id="pgps">${t('gps')}</button><button class="btn" id="pok">OK</button><button class="btn sec" id="pcx">✕</button></div></div>`;
+  document.body.appendChild(ov);
+  const m=L.map('pm').setView(initial?[initial.lat,initial.lng]:CENTER,17);layers(m);
+  let cur=initial||null,mk=initial?L.marker([initial.lat,initial.lng]).addTo(m):null;
+  const setp=(la,ln)=>{cur={lat:la,lng:ln};if(mk)mk.setLatLng([la,ln]);else mk=L.marker([la,ln]).addTo(m)};
+  m.on('click',e=>setp(e.latlng.lat,e.latlng.lng));
+  $('#pgps').onclick=()=>navigator.geolocation.getCurrentPosition(p=>{setp(p.coords.latitude,p.coords.longitude);m.setView([cur.lat,cur.lng],18)},()=>msg('GPS'));
+  const close=()=>{m.remove();ov.remove()};
+  $('#pok').onclick=()=>{close();cb(cur)};$('#pcx').onclick=close;
+}
+function photosCard(canAdd){
+  const ph=M.photos||[];
+  return `<div class="card"><h2>${t('photos')}</h2>${canAdd?`<div class="drop" id="drop">${t('drop')} <button class="btn sec" id="addph">+</button><input type="file" id="phin" accept="image/*" multiple hidden></div>`:''}<div class="thumbs">${ph.map((p,i)=>`<img src="${p}">`).join('')}</div></div>`;
+}
+function bindPhotos(){
+  document.querySelectorAll('.thumbs img').forEach(i=>i.onclick=()=>{$('#peek img').src=i.src;$('#peek').style.display='flex'});
+  const d=$('#drop');if(!d)return;const inp=$('#phin');
+  $('#addph').onclick=()=>inp.click();
+  const up=async fs=>{for(const f of fs){if(!f.type.startsWith('image/'))continue;const r=await post({action:'photo',id:MID,ht:HT,data:await lowres(f)});if(!r.ok)msg(r.error||t('err'))}load()};
+  inp.onchange=()=>up(inp.files);
+  d.ondragover=e=>{e.preventDefault();d.classList.add('over')};d.ondragleave=()=>d.classList.remove('over');
+  d.ondrop=e=>{e.preventDefault();d.classList.remove('over');up(e.dataTransfer.files)};
+}
+const hcRead=()=>M.hostc?`<div class="card"><label>${t('hc')}</label>${esc(M.hostc).replace(/\n/g,'<br>')}</div>`:'';
+function sigCards(){return ['ack','noted'].map(k=>`<div class="card"><h2>${t(k)}</h2>${sigLine(k)||'<div class="mut">—</div>'}</div>`).join('')}
+
+/* ---------- signing with email code ---------- */
+function signCard(){
+  return `<div class="card"><h2>${t('signhere')}</h2><div class="mut">${t('otpnote')}</div><label style="margin-top:8px">${t('name')}</label><input id="s_name" value="${esc(((M.con&&M.con[CC])||{}).name||'')}"><label style="margin-top:8px">${t('signhere')}</label><canvas class="pad" id="s_pad"></canvas><button class="btn sec" id="s_clr">${t('clear')}</button>
+  <div id="s_step1"><button class="btn" id="s_send">${t('sendcode')}</button></div>
+  <div id="s_step2" style="display:none"><label>${t('code')}</label><input id="s_code" inputmode="numeric" maxlength="6"><button class="btn" id="s_go">${t('confirmsign')}</button></div></div>`;
+}
+function bindSign(){
+  const sp=$('#s_pad');if(!sp)return;pad(sp);$('#s_clr').onclick=()=>sp.clr();
+  $('#s_send').onclick=async()=>{if(!$('#s_name').value.trim()||!sp.has())return msg(t('signhere'));dirty=true;
+    const r=await post({action:'otpSend',id:MID,c:CC,t:TK});if(!r.ok)return msg(r.error||t('err'));
+    msg(t('codesent')+' '+r.to);$('#s_step1').style.display='none';$('#s_step2').style.display='block'};
+  $('#s_go').onclick=async()=>{const r=await post({action:'sign',id:MID,c:CC,t:TK,who:CC,name:$('#s_name').value.trim(),sign:sp.toDataURL('image/png'),code:$('#s_code').value});
+    if(!r.ok)return msg(r.error||t('err'));dirty=false;load()};
+}
+
+/* ---------- HOME ---------- */
+async function home(){
+  const sess=localStorage.simopsSess,semail=localStorage.simopsEmail;
+  let h='';
+  if(sess){
+    h+=`<div class="card"><h2>${t('newm')}</h2><div class="mut">${esc(semail||'')} <button class="btn sec" id="lo">${t('logout')}</button></div><div class="grid">
+     <div><label>${t('host')}</label><input id="h_host" value="PT. EcoOils Jaya Indonesia (Sei Mangkei)"></div>
+     <div><label>${t('date')}</label><input id="h_date" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+     <div><label>${t('time')}</label><input id="h_time" type="time"></div></div>
+     <label style="margin-top:10px">${t('hem')}</label><input id="h_em" value="${esc(semail||'')}">
+     <button class="btn" id="mk">${t('create')}</button></div><div id="mine"></div>`;
+  }else{
+    h+=`<div class="card"><h2>${t('hostlogin')}</h2><label>${t('email')}</label><input id="l_em" type="email"><div id="l1"><button class="btn" id="l_send">${t('sendcode')}</button></div><div id="l2" style="display:none"><label>${t('code')}</label><input id="l_code" inputmode="numeric" maxlength="6"><button class="btn" id="l_go">${t('login')}</button></div></div>`;
+  }
+  h+=`<div class="card"><h2>${t('register')}</h2><div id="reg" class="mut">…</div></div>`;
+  $('#app').innerHTML=h;
+  if(sess){
+    $('#lo').onclick=()=>{localStorage.removeItem('simopsSess');home()};
+    $('#mk').onclick=async()=>{const r=await post({action:'create',session:sess,base:BASE,host:$('#h_host').value,date:$('#h_date').value,time:$('#h_time').value,hostEmails:$('#h_em').value,areas:DEF_AREAS});
+      if(!r.ok){if(r.error==='session'){localStorage.removeItem('simopsSess');msg(t('nosess'));return home()}return msg(r.error||t('err'))}
+      location.href=`${BASE}?m=${r.id}&ht=${r.ht}`};
+    post({action:'mine',session:sess}).then(r=>{if(r.ok&&r.items.length)$('#mine').innerHTML=`<div class="card"><h2>${t('mine')}</h2>${r.items.map(x=>`<div class="lk"><a href="${BASE}?m=${x.id}&ht=${x.ht}">${esc(x.date)} ${esc(x.time||'')}</a> <span class="tag">${t('s_'+x.status)}</span></div>`).join('')}</div>`});
+  }else{
+    $('#l_send').onclick=async()=>{await post({action:'hostOtp',email:$('#l_em').value});$('#l1').style.display='none';$('#l2').style.display='block';msg(t('codesent')+' '+$('#l_em').value)};
+    $('#l_go').onclick=async()=>{const r=await post({action:'hostLogin',email:$('#l_em').value,code:$('#l_code').value});if(!r.ok)return msg(r.error||t('err'));localStorage.simopsSess=r.session;localStorage.simopsEmail=r.email;home()};
+  }
+  get({action:'list'}).then(r=>{const b=$('#reg');if(!r.ok||!r.items.length){b.textContent=t('noreg');return}
+    b.innerHTML=r.items.map(x=>`<div class="lk"><a href="${BASE}?m=${x.id}">${esc(String(x.date).slice(0,10))} ${esc(x.time||'')}</a> <span class="tag ${x.status==='done'?'ok':''}">${t('s_'+x.status)}</span><div class="mut">${esc(x.parties||'')}</div></div>`).join('')});
+}
+
+/* ---------- HOST ---------- */
+function hostView(){
+  const done=M.status==='done',lockd=M.status==='signing'||done,tok=M.tok||{};
+  const dis=lockd?'disabled':'';
+  let h=stepper()+infoCard();
+  h+=`<div class="card"><h2>${t('savedet')}</h2><div class="grid">
+   <div><label>${t('host')}</label><input id="d_host" value="${esc(M.host)}" ${dis}></div>
+   <div><label>${t('date')}</label><input id="d_date" type="date" value="${esc(M.date)}" ${dis}></div>
+   <div><label>${t('time')}</label><input id="d_time" type="time" value="${esc(M.time)}" ${dis}></div>
+   <div><label>${t('clashM')}</label><input id="d_cm" type="number" min="5" value="${M.clashM||50}" ${dis}></div></div>
+   <label style="margin-top:10px">${t('hem')}</label><input id="d_em" value="${esc(M.hostEmails||'')}" ${dis}>
+   <div class="grid" style="margin-top:10px"><div><label>${t('ackem')}</label><input id="d_ack" type="email" value="${esc(M.ackEmail||'')}" ${dis}></div><div><label>${t('notedem')}</label><input id="d_nt" type="email" value="${esc(M.notedEmail||'')}" ${dis}></div></div>
+   <label style="margin-top:10px">${t('areas')}</label><textarea id="d_areas" style="min-height:60px" ${dis}>${esc((M.areas||[]).join('\n'))}</textarea>
+   <button class="btn" id="sd" ${dis}>${t('savedet')}</button></div>`;
+  const pub=`${BASE}?m=${M.id}`;
+  h+=`<div class="card"><h2>${t('links')}</h2><div class="lk"><b>${t('publ')}</b><div class="link">${pub}</div><button class="btn sec" data-copy="${pub}">${t('copy')}</button></div>${ROLES.map(c=>{const u=`${BASE}?m=${M.id}&c=${c}&t=${tok[c]}`;const lab=ROLES.indexOf(c)<5?RN(c):t(c);return `<div class="lk"><b>${lab}</b> ${M.con[c]&&M.con[c].rows&&M.con[c].rows.length?`<span class="tag ok">${t('entered')}</span>`:''}${M.sign&&M.sign[c]?`<span class="tag ok">${t('signed')}</span>`:''}<div class="link">${u}</div><button class="btn sec" data-copy="${u}">${t('copy')}</button><a class="btn sec" target="_blank" href="https://wa.me/?text=${encodeURIComponent('SIMOPS '+M.date+' '+(M.time||'')+' - '+lab+': '+u)}">${t('wa')}</a></div>`}).join('')}</div>`;
+  h+=overview()+mapCard();
+  h+=`<div class="card">`;
+  if(M.status==='open')h+=`<button class="btn" data-st="discussion">${t('fix')}</button>`;
+  if(M.status==='discussion')h+=`<button class="btn sec" data-st="open">${t('reopen')}</button><button class="btn" data-st="signing">${t('tosign')}</button>`;
+  if(M.status==='signing'&&!Object.keys(M.sign||{}).length)h+=`<button class="btn sec" data-st="discussion">${t('back')}</button>`;
+  h+=`</div>`;
+  if(sIdx()>=1)h+=photosCard(M.status==='discussion');
+  h+=`<div class="card"><label>${t('hc')}</label><textarea id="hc" ${dis}>${esc(M.hostc||'')}</textarea><button class="btn" id="shc" ${dis}>${t('savehc')}</button></div>`;
+  h+=sigCards();
+  if(done)h+=`<div class="card"><div class="okb">${t('done')}</div>${M.pdf?`<a class="btn" target="_blank" href="${M.pdf}">${t('pdf')}</a>`:''}<button class="btn sec" id="rs">${t('resend')}</button></div>`;
+  $('#app').innerHTML=h;
+  document.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>{navigator.clipboard.writeText(b.dataset.copy);b.textContent=t('copied')});
+  document.querySelectorAll('[data-st]').forEach(b=>b.onclick=async()=>{const r=await post({action:'status',id:MID,ht:HT,to:b.dataset.st});if(!r.ok)msg(r.error||t('err'));load()});
+  $('#sd').onclick=async()=>{const r=await post({action:'meta',id:MID,ht:HT,host:$('#d_host').value,date:$('#d_date').value,time:$('#d_time').value,clashM:+$('#d_cm').value||50,hostEmails:$('#d_em').value,ackEmail:$('#d_ack').value,notedEmail:$('#d_nt').value,areas:$('#d_areas').value.split('\n').map(s=>s.trim()).filter(Boolean)});msg(r.ok?t('saved'):(r.error||t('err')));dirty=false;load()};
+  $('#shc').onclick=async()=>{const r=await post({action:'meta',id:MID,ht:HT,hostc:$('#hc').value});msg(r.ok?t('saved'):(r.error||t('err')));dirty=false};
+  const rs=$('#rs');if(rs)rs.onclick=async()=>{const r=await post({action:'resend',id:MID,ht:HT});msg(r.ok?t('sendall'):(r.error||t('err')))};
+  bindPhotos();drawMap();
+}
+
+/* ---------- PARTY (contractor / ack / noted) ---------- */
+function partyView(){
+  const isCon=CODES.includes(CC),e=(M.con&&M.con[CC])||{},open=M.status==='open';
+  const rows=(e.rows&&e.rows.length)?e.rows:[{area:'',activity:'',constraint:''}];
+  let h=stepper()+infoCard();
+  h+=`<datalist id="al">${(M.areas||[]).map(a=>`<option value="${esc(a)}">`).join('')}</datalist>`;
+  h+=`<div class="card"><h2>${RN(CC)}</h2>`;
+  if(isCon&&open)h+=`<div class="grid"><div><label>${t('cname')}</label><input id="c_name" value="${esc(e.name||'')}"></div><div><label>${t('cemail')}</label><input id="c_em" type="email" value="${esc(e.email||'')}"></div></div><div id="rows"></div><button class="btn sec" id="ar">${t('addrow')}</button><br><button class="btn" id="se">${t('saveentry')}</button>`;
+  else h+=`<div class="mut">${isCon?t('locked'):''}</div>`;
+  h+=`</div>`+overview()+mapCard();
+  if(sIdx()>=1)h+=photosCard(false);
+  h+=hcRead()+sigCards();
+  if(M.status==='signing'&&REQ().includes(CC)&&!(M.sign&&M.sign[CC]))h+=signCard();
+  if(M.status==='done')h+=`<div class="card"><div class="okb">${t('done')}</div></div>`;
+  $('#app').innerHTML=h;
+  if(isCon&&open){
+    const box=$('#rows');
+    const add=r=>{const d=document.createElement('div');d.className='row';d._p=r.lat!=null?{lat:r.lat,lng:r.lng}:null;
+      d.innerHTML=`<input list="al" class="ra" placeholder="${t('area')}" value="${esc(r.area)}"><input class="rb" placeholder="${t('activity')}" value="${esc(r.activity)}"><input class="rc" placeholder="${t('constraint')}" value="${esc(r.constraint)}"><button class="pinb ${d._p?'set':''}" title="${t('pin')}">📍</button><button class="x">×</button>`;
+      d.querySelector('.pinb').onclick=ev=>{const b=ev.currentTarget;pickPin(d._p,p=>{if(p){d._p=p;b.classList.add('set');dirty=true}})};
+      d.querySelector('.x').onclick=()=>{if(box.children.length>1)d.remove()};box.appendChild(d)};
+    rows.forEach(add);$('#ar').onclick=()=>add({area:'',activity:'',constraint:''});
+    $('#se').onclick=async()=>{const rs=[...box.children].map(d=>({area:d.querySelector('.ra').value.trim(),activity:d.querySelector('.rb').value.trim(),constraint:d.querySelector('.rc').value.trim(),lat:d._p?d._p.lat:null,lng:d._p?d._p.lng:null})).filter(r=>r.area||r.activity||r.constraint);
+      const r=await post({action:'entry',id:MID,c:CC,t:TK,name:$('#c_name').value,email:$('#c_em').value,rows:rs});msg(r.ok?t('saved'):(r.error||t('err')));dirty=false;load()};
+  }
+  bindSign();bindPhotos();drawMap();
+}
+
+/* ---------- PUBLIC ---------- */
+function publicView(){
+  let h=`<div class="mut" style="margin-bottom:8px">${t('publicnote')}</div>`+stepper()+infoCard();
+  if(M.status==='open')h+=`<div class="warn">${t('draft')}</div>`;
+  else h+=overview()+mapCard()+(sIdx()>=1?photosCard(false):'')+hcRead()+sigCards();
+  $('#app').innerHTML=h;bindPhotos();drawMap();
+}
+
+/* ---------- VERIFY ---------- */
+async function verifyView(){
+  const r=await get({action:'verify',id:VID});
+  if(!r.ok){$('#app').innerHTML=`<div class="card badb">${t('bad')}</div>`;return}
+  if(!r.sealed){$('#app').innerHTML=`<div class="card warn">${t('notsealed')}</div>`;return}
+  const valid=r.contentOk&&r.sigs.every(s=>s.ok)&&(r.sealOk!==false);
+  $('#app').innerHTML=`<div class="${valid?'okb':'badb'}"><b>${valid?t('vvalid'):t('vbad')}</b></div>
+  <div class="card"><h2>${t('signers')} (${r.sigs.length}/${r.required})</h2><table><tr><th></th><th>${t('name')}</th><th>${t('email')}</th><th>${t('date')}</th><th>${t('method')}</th></tr>${r.sigs.map(s=>`<tr><td>${s.ok?'✓':'✗'}</td><td>${esc(s.label)}<br>${esc(s.name)}</td><td>${esc(s.email)}</td><td>${esc(s.at)}</td><td>${esc(s.method)}</td></tr>`).join('')}</table>
+  <p class="mono">${t('hash')}: ${r.H}<br>${t('seal')}: ${r.seal||'—'}</p><a class="btn sec" href="${BASE}?m=${VID}">${t('open')}</a></div>`;
+}
+
+/* ---------- LOAD ---------- */
+async function load(){
+  if(!API_URL){$('#app').innerHTML=`<div class="card warn">${t('noapi')}</div>`;return}
+  if(VID)return verifyView();
+  if(!MID)return home();
+  const r=await get({action:'get',id:MID,ht:HT||'',c:CC||'',t:TK||''});
+  if(!r.ok){$('#app').innerHTML=`<div class="card badb">${t('bad')}</div>`;return}
+  M=r.meeting;role=r.role;
+  if(role==='host')hostView();else if(role==='con')partyView();else publicView();
+  dirty=false;
+}
+function setLang(l){lang=l;localStorage.simopsLang=l;document.documentElement.lang=l;
+  document.querySelectorAll('[data-t]').forEach(e=>e.textContent=t(e.dataset.t));
+  document.querySelectorAll('.lang button').forEach(b=>b.classList.toggle('on',b.dataset.l===l));load()}
+document.querySelectorAll('.lang button').forEach(b=>b.onclick=()=>setLang(b.dataset.l));
+$('#peek').onclick=()=>$('#peek').style.display='none';
+$('#app').addEventListener('input',()=>dirty=true);
+setInterval(()=>{if(M&&!dirty&&MID&&!document.querySelector('.modal'))load()},30000);
+setLang(lang);
+</script>
+</body>
+</html>
