@@ -1,4 +1,4 @@
-// VERSION: 5.4.0 - correct dates/times in lists; Admin can delete meetings
+// VERSION: 5.5.0 - EcoOils Project / EcoOils Operations companies; EcoOils Rep and HSSE sign with one code (no email)
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > Project Settings > Script properties > add HOST_EMAILS = the HSSE host email(s) >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -10,9 +10,9 @@ function hostEmails_() {
 }
 const SHEET_NAME = 'SIMOPS';
 const FOLDER_NAME = 'SIMOPS Records';
-const CODES = ['KKS', 'WEN', 'GSB', 'PBS', 'ECO', 'OT1', 'OT2'];
-const ROLES = ['KKS', 'WEN', 'GSB', 'PBS', 'ECO', 'OT1', 'OT2', 'ack', 'noted'];
-const NAMES = { KKS: 'KKS', WEN: 'WEN', GSB: 'GSB', PBS: 'PBS', ECO: 'EcoOils', OT1: 'Other contractor 1', OT2: 'Other contractor 2', ack: 'Acknowledged (EcoOils Construction Representative)', noted: 'Noted (EcoOils HSSE)' };
+const CODES = ['KKS', 'WEN', 'GSB', 'PBS', 'ECO', 'EOO', 'OT1', 'OT2'];
+const ROLES = ['KKS', 'WEN', 'GSB', 'PBS', 'ECO', 'EOO', 'OT1', 'OT2', 'ack', 'noted'];
+const NAMES = { KKS: 'KKS', WEN: 'WEN', GSB: 'GSB', PBS: 'PBS', ECO: 'EcoOils Project', EOO: 'EcoOils Operations', OT1: 'Other contractor 1', OT2: 'Other contractor 2', ack: 'Acknowledged (EcoOils Construction Representative)', noted: 'Noted (EcoOils HSSE)' };
 
 // Sheet cells come back as Date objects (date shifted by the time zone, time as 1899): normalise to plain text in the sheet's own time zone
 function tz_() { try { return SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone() || 'Asia/Jakarta'; } catch (e) { return 'Asia/Jakarta'; } }
@@ -497,7 +497,7 @@ function handle_(b) {
     }
     if (b.to === 'signing') {
       if (!(m.photos || []).length) return { ok: false, error: 'a meeting photo is required before signing' };
-      const miss = required_(m).filter(function (r) { return !okEmails_(emailOf_(m, r)); });
+      const miss = required_(m).filter(function (r) { return CTL.indexOf(r) < 0 && !okEmails_(emailOf_(m, r)); });   // EcoOils Rep / HSSE sign with their code: no email needed
       if (miss.length) return { ok: false, error: 'email missing for: ' + miss.map(function (r) { return NAMES[r]; }).join(', ') };
       m.H = contentHash_(m); m.frozenAt = new Date().toISOString();
     } else { delete m.H; delete m.frozenAt; }
@@ -525,8 +525,9 @@ function handle_(b) {
     if (m.sign[w]) return { ok: false, error: 'already signed' };
     if (!b.name || !b.sign) return { ok: false, error: 'name and signature required' };
     if (!String(b.pos || '').trim()) return { ok: false, error: 'position required' };
-    if (!otpCheck_('sign:' + m.id + ':' + w, b.code)) return { ok: false, error: 'wrong or expired code' };
-    const s = { name: String(b.name).trim(), emailFull: emailOf_(m, w), at: Utilities.formatDate(new Date(), 'Asia/Jakarta', "yyyy-MM-dd HH:mm 'WIB'"), method: 'Email one-time code', pos: String(b.pos).trim().slice(0, 60), sign: b.sign };
+    const byCode = m.v === 2 && CTL.indexOf(w) >= 0;   // signed in with the sign-off code set by the Admin: no email step
+    if (!byCode && !otpCheck_('sign:' + m.id + ':' + w, b.code)) return { ok: false, error: 'wrong or expired code' };
+    const s = { name: String(b.name).trim(), emailFull: byCode ? (emailOf_(m, w) || '') : emailOf_(m, w), at: Utilities.formatDate(new Date(), 'Asia/Jakarta', "yyyy-MM-dd HH:mm 'WIB'"), method: byCode ? 'Sign-off code' : 'Email one-time code', pos: String(b.pos).trim().slice(0, 60), sign: b.sign };
     s.sh = sigHash_(w, s, m.H);
     m.sign[w] = s;
     if (!finish_(m)) save_(m);
