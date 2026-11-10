@@ -95,7 +95,7 @@ canvas.pad{width:100%;height:clamp(90px,18vh,170px);border:1px dashed var(--grey
 <div id="peek"><img alt=""></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
-const VERSION='5.15.0';document.getElementById('verlbl').textContent='v'+VERSION;
+const VERSION='5.15.1';document.getElementById('verlbl').textContent='v'+VERSION;
 const API_URL='https://script.google.com/macros/s/AKfycbz9C-pbRRJ0Rf1EseelBe1IGp0FkydwoIZ0e1xoBgC_Wkxl7C7dkOhFh3c9v2EczQCMCA/exec';
 const CODES=['KKS','WEN','GSB','PBS','ECO','EOO','OT1','OT2'];
 const ROLES=[...CODES,'ack','noted'];
@@ -175,14 +175,15 @@ function othersCard(){
 const othRow=x=>`<div class="orow" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #eee"><input class="on" placeholder="${t('memname')}" value="${esc((x&&x.n)||'')}"><input class="oo" placeholder="${t('org')}" value="${esc((x&&x.o)||'')}"><input class="op" placeholder="${t('pos')}" value="${esc((x&&x.p)||'')}"><button type="button" class="btn sec ox">${t('del')}</button></div>`;
 function bindOthers(){
   const box=$('#oth');if(!box)return;
-  const wire=()=>box.querySelectorAll('.ox').forEach(b=>b.onclick=()=>b.closest('.orow').remove());
-  wire();$('#otha').onclick=()=>{$('#othl').insertAdjacentHTML('beforeend',othRow({}));wire();const n=box.querySelectorAll('.on');n[n.length-1].focus()};
+  const wire=()=>box.querySelectorAll('.ox').forEach(b=>b.onclick=()=>{EDITING=true;b.closest('.orow').remove()});
+  wire();$('#otha').onclick=()=>{EDITING=true;$('#othl').insertAdjacentHTML('beforeend',othRow({}));wire();const n=box.querySelectorAll('.on');n[n.length-1].focus()};
   $('#oths').onclick=()=>busy($('#oths'),async()=>{
     const list=[...box.querySelectorAll('.orow')].map(d=>({n:d.querySelector('.on').value.trim(),o:d.querySelector('.oo').value.trim(),p:d.querySelector('.op').value.trim()})).filter(x=>x.n);
     const r=await post({action:'others',id:ECTX?ECTX.id:MID,...(ECTX?ECTX.auth:(HT?{ht:HT}:AUTH())),list});
-    if(!r.ok)return toast(r.error||t('err'));dirty=false;toast(t('saved'));if(ECTX)ECTX.after();else applyR(r)})
+    if(!r.ok)return toast(r.error||t('err'));dirty=false;EDITING=false;toast(t('saved'));if(ECTX)ECTX.after();else applyR(r)})
 }
-let ECTX=null;
+let ECTX=null,EDITING=false;
+document.addEventListener('input',e=>{if(e.target.closest&&e.target.closest('#oth,.ed'))EDITING=true});   // typing in the Others / constraint editors blocks the 30 s auto-refresh so nothing disappears
 function canEditCons(){if(ECTX)return M.v===2&&(M.status==='open'||M.status==='discussion');return M.v===2&&(M.status==='open'||M.status==='discussion')&&(role==='host'||(CTL.includes(CC)&&role==='con'))}
 function consOpt(cur){const k=!!cur&&!CONS.includes(cur);return `<select class="ek"><option value="">${t('constraint')}…</option>${CONS.map(c=>`<option value="${esc(c)}" ${!k&&cur===c?'selected':''}>${esc(c)}</option>`).join('')}<option value="__other" ${k?'selected':''}>${t('other')}</option></select><input class="eo" placeholder="${t('constraint')}" value="${k?esc(cur):''}" style="margin-top:4px;${k?'':'display:none'}">`}
 function overview(ed){
@@ -194,19 +195,19 @@ function overview(ed){
   return h;
 }
 function consSave(payload,btn){return busy(btn,async()=>{const r=await post({action:'consEdit',id:ECTX?ECTX.id:MID,...(ECTX?ECTX.auth:(HT?{ht:HT}:AUTH())),...payload});
-  if(!r.ok)return toast(r.error||t('err'));dirty=false;toast(t('saved'));if(ECTX)ECTX.after();else applyR(r)})}
+  if(!r.ok)return toast(r.error||t('err'));dirty=false;EDITING=false;toast(t('saved'));if(ECTX)ECTX.after();else applyR(r)})}
 function bindCons(){
   bindOthers();
   const wire=d=>{const s=d.querySelector('.ek'),o=d.querySelector('.eo');s.onchange=()=>{o.style.display=s.value==='__other'?'':'none'}};
   const val=d=>{const s=d.querySelector('.ek');return s.value==='__other'?d.querySelector('.eo').value.trim():s.value};
-  const rerender=()=>{if(ECTX)ECTX.after();else applyR({ok:true,meeting:M,role})};
+  const rerender=()=>{EDITING=false;dirty=false;if(ECTX)ECTX.after();else applyR({ok:true,meeting:M,role})};
   const withM=f=>{if(!ECTX)return f();const p=M;M=ECTX.m;try{return f()}finally{M=p}};
-  document.querySelectorAll('[data-ec]').forEach(b=>b.onclick=()=>{const [c,i]=b.dataset.ec.split(':'),r=withM(()=>M.con[c].rows[+i]),tr0=b.closest('tr');b.style.display='none';
+  document.querySelectorAll('[data-ec]').forEach(b=>b.onclick=()=>{EDITING=true;const [c,i]=b.dataset.ec.split(':'),r=withM(()=>M.con[c].rows[+i]),tr0=b.closest('tr');b.style.display='none';
     tr0.insertAdjacentHTML('afterend','<tr class="er-edit" data-for="'+b.dataset.ec+'"><td colspan="4" class="ec2"></td></tr>');const td=tr0.nextElementSibling.querySelector('.ec2');
     td.innerHTML=`<div class="ed">${consOpt(r.constraint||'')}<label style="margin-top:6px">${t('ctrl')}</label><textarea class="ectl" rows="3" placeholder="${t('ctrlph')}">${esc(r.controls||'')}</textarea><div style="display:flex;gap:6px;margin-top:6px"><button type="button" class="btn" data-sv>${t('save')}</button><button type="button" class="btn sec" data-cx>${t('cancel')}</button></div></div>`;
     const d=td.querySelector('.ed');wire(d);d.querySelector('[data-cx]').onclick=rerender;
     d.querySelector('[data-sv]').onclick=e=>consSave({edits:[{c,i:+i,constraint:val(d),controls:d.querySelector('.ectl').value.trim()}]},e.target)});
-  document.querySelectorAll('[data-addc]').forEach(b=>b.onclick=()=>{const c=b.dataset.addc,box=b.parentElement;b.style.display='none';
+  document.querySelectorAll('[data-addc]').forEach(b=>b.onclick=()=>{EDITING=true;const c=b.dataset.addc,box=b.parentElement;b.style.display='none';
     box.insertAdjacentHTML('beforeend',`<div class="ed" style="margin-top:8px;padding:8px;border:1px dashed #bbb;border-radius:8px"><select class="ea"><option value="">${t('area')}…</option>${withM(()=>areaList()).map(a=>`<option value="${esc(a)}">${esc(a)}</option>`).join('')}</select><input class="eb" placeholder="${t('activity')}" style="margin-top:4px"><div style="margin-top:4px">${consOpt('')}</div><label style="margin-top:6px">${t('ctrl')}</label><textarea class="ectl" rows="3" placeholder="${t('ctrlph')}"></textarea><div style="display:flex;gap:6px;margin-top:6px"><button type="button" class="btn" data-sv>${t('save')}</button><button type="button" class="btn sec" data-cx>${t('cancel')}</button></div></div>`);
     const d=box.querySelector('.ed');wire(d);d.querySelector('[data-cx]').onclick=rerender;
     d.querySelector('[data-sv]').onclick=e=>{const a={c,area:d.querySelector('.ea').value,activity:d.querySelector('.eb').value.trim(),constraint:val(d),controls:d.querySelector('.ectl').value.trim()};
@@ -357,7 +358,7 @@ async function liveHome(kind){   // Admin, EcoOils Rep and EcoOils HSSE see toda
   clearInterval(LIVET);const box=$('#live');if(!box||!kind)return;
   const cr=ls('simopsCR'),sess=localStorage.simopsSess;let hts=null;
   const draw=async(force)=>{const bx=$('#live');if(!bx){clearInterval(LIVET);return}
-    if(!force&&bx.querySelector('.ed'))return;   // never redraw while someone is typing in an editor
+    if(!force&&(bx.querySelector('.ed')||EDITING))return;   // never redraw while someone is typing in an editor
     try{const r=await get({action:'current',full:1,c:kind==='ctl'?cr:''});
       if(!r.ok||!r.meeting){bx.innerHTML=`<div class="card"><h2>${t('livet')}</h2><div class="mut">${t('nocur')}</div></div>`;return}
       let link=`${BASE}?m=${r.id}`;
@@ -447,7 +448,7 @@ async function home(){
 
 /* ---------- HOST ---------- */
 function hostView(){
-  ECTX=null;
+  ECTX=null;EDITING=false;
   const done=M.status==='done',lockd=M.status==='signing'||done,tok=M.tok||{};
   const dis=lockd?'disabled':'';
   let h=stepper()+infoCard();
@@ -546,7 +547,7 @@ async function regFix(els,bx){const prev=els.map(e=>e.value);let ch=0;bx.innerHT
   dirty=true;bx.innerHTML=`<div class="okb">${t('regdone')} <button type="button" class="btn sec ru">${t('regundo')}</button></div>`;
   bx.querySelector('.ru').onclick=()=>{els.forEach((e,i)=>e.value=prev[i]);bx.innerHTML=''}}
 function partyView(){
-  ECTX=null;
+  ECTX=null;EDITING=false;
   const isCon=CODES.includes(CC),e=(M.con&&M.con[CC])||{},open=M.status==='open';
   const dr=(isCon&&open)?loadDraft():null;
   const rows=(dr&&dr.rows&&dr.rows.length)?dr.rows:((e.rows&&e.rows.length)?e.rows:[{area:'',activity:'',constraint:''}]);
@@ -638,7 +639,7 @@ document.querySelectorAll('.lang button').forEach(b=>b.onclick=()=>setLang(b.dat
 $('#peek').onclick=()=>$('#peek').style.display='none';
 $('#app').addEventListener('input',()=>{dirty=true;saveDraft()});
 $('#app').addEventListener('change',()=>saveDraft());
-setInterval(()=>{const ae=document.activeElement;if(M&&!dirty&&MID&&!document.querySelector('.modal')&&!(ae&&/INPUT|TEXTAREA|SELECT/.test(ae.tagName)))load()},30000);
+setInterval(()=>{const ae=document.activeElement;if(M&&!dirty&&!EDITING&&MID&&!document.querySelector('.modal')&&!(ae&&/INPUT|TEXTAREA|SELECT/.test(ae.tagName)))load()},30000);
 if(MID||VID)document.getElementById('homelnk').style.display='inline-block';
 setLang(lang);
 </script>
