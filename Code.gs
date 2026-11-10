@@ -1,4 +1,4 @@
-// VERSION: 4.9.0 - SIMOPS Meeting Record backend (single sign-in with per-party PIN set by email code, public record, email-OTP signatures, tamper-evident seal, map)
+// VERSION: 4.9.1 - SIMOPS Meeting Record backend (single sign-in with per-party PIN set by email code, public record, email-OTP signatures, tamper-evident seal, map)
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > put the HSSE host email(s) in HOST_EMAILS below >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -18,7 +18,13 @@ function sheet_() {
   if (!sh) { sh = ss.insertSheet(SHEET_NAME); sh.appendRow(['ID', 'Date', 'Time', 'Host', 'Status', 'Parties', 'Clashes', 'Updated', 'PDF', 'Owner', 'HostToken']); }
   return sh;
 }
-function file_(id) { const it = folder_().getFilesByName('M_' + id + '.json'); return it.hasNext() ? it.next() : null; }
+function file_(id) {
+  const c = CacheService.getScriptCache(), k = 'fid:' + id, fid = c.get(k);   // remembering the Drive file id avoids a slow folder search on every request
+  if (fid) { try { return DriveApp.getFileById(fid); } catch (e) { c.remove(k); } }
+  const it = folder_().getFilesByName('M_' + id + '.json');
+  if (!it.hasNext()) return null;
+  const f = it.next(); c.put(k, f.getId(), 21600); return f;
+}
 function load_(id) { const f = file_(id); return f ? JSON.parse(f.getBlob().getDataAsString()) : null; }
 function sha_(s) { return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, s, Utilities.Charset.UTF_8).map(function (b) { return ('0' + (b & 255).toString(16)).slice(-2); }).join(''); }
 function rnd_(n) { return Utilities.getUuid().replace(/-/g, '').slice(0, n); }
