@@ -1,9 +1,13 @@
-// VERSION: 5.3.0 - Admin sets EcoOils Rep / EcoOils HSSE PINs (adminSetPin); self-service PIN setting removed
-// Setup: Google Sheet > Extensions > Apps Script > paste this file > put the HSSE host email(s) in HOST_EMAILS below >
+// VERSION: 5.3.1 - host emails now live in Script property HOST_EMAILS (no more overwrite on paste)
+// Setup: Google Sheet > Extensions > Apps Script > paste this file > Project Settings > Script properties > add HOST_EMAILS = the HSSE host email(s) >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
 
-const HOST_EMAILS = ['replace-with-host-email@example.com']; // people allowed to create meetings
+const HOST_EMAILS_DEFAULT = [];   // leave empty: set the host email(s) once in Project Settings > Script properties > HOST_EMAILS (comma separated). They then survive every re-paste of this file.
+function hostEmails_() {
+  const p = String(PropertiesService.getScriptProperties().getProperty('HOST_EMAILS') || '');
+  return emails_(p).concat(HOST_EMAILS_DEFAULT);
+}
 const SHEET_NAME = 'SIMOPS';
 const FOLDER_NAME = 'SIMOPS Records';
 const CODES = ['KKS', 'WEN', 'GSB', 'PBS', 'ECO', 'OT1', 'OT2'];
@@ -242,7 +246,7 @@ function handle_(b) {
   // ----- host login (email OTP, no passwords) -----
   if (b.action === 'hostOtp') {
     const em = String(b.email || '').trim().toLowerCase();
-    if (HOST_EMAILS.map(function (x) { return x.toLowerCase(); }).indexOf(em) >= 0) otpSend_('host:' + em, em, 'host login');
+    if (hostEmails_().map(function (x) { return x.toLowerCase(); }).indexOf(em) >= 0) otpSend_('host:' + em, em, 'host login');
     return { ok: true };
   }
   if (b.action === 'hostLogin') {
@@ -255,13 +259,13 @@ function handle_(b) {
   // ----- host (admin) PIN sign-in: PIN is set only through an emailed code -----
   if (b.action === 'hostPinOtp') {
     const em = String(b.email || '').trim().toLowerCase();
-    if (HOST_EMAILS.map(function (x) { return x.toLowerCase(); }).indexOf(em) >= 0) otpSend_('hpin:' + em, em, 'setting your SIMOPS host PIN');
+    if (hostEmails_().map(function (x) { return x.toLowerCase(); }).indexOf(em) >= 0) otpSend_('hpin:' + em, em, 'setting your SIMOPS host PIN');
     return { ok: true };
   }
   if (b.action === 'hostPinSet') {
     const em = String(b.email || '').trim().toLowerCase();
     if (!/^\d{4,8}$/.test(String(b.pin))) return { ok: false, error: 'PIN must be 4 to 8 digits' };
-    if (HOST_EMAILS.map(function (x) { return x.toLowerCase(); }).indexOf(em) < 0 || !otpCheck_('hpin:' + em, b.code)) return { ok: false, error: 'wrong or expired code' };
+    if (hostEmails_().map(function (x) { return x.toLowerCase(); }).indexOf(em) < 0 || !otpCheck_('hpin:' + em, b.code)) return { ok: false, error: 'wrong or expired code' };
     props_().setProperty('hpin:' + em, pinHash_('host:' + em, String(b.pin)));
     CacheService.getScriptCache().remove('lock:host:' + em);
     return { ok: true };
