@@ -86,7 +86,7 @@ canvas.pad{width:100%;height:clamp(90px,18vh,170px);border:1px dashed var(--grey
 </head>
 <body>
 <header>
-  <img class="logo" src="logo.png" alt="EcoOils Mentari" style="height:clamp(36px,6vw,56px);width:auto;max-width:100%;display:block">
+  <img class="logo" src="logo.png" alt="EcoOils Project" style="height:clamp(36px,6vw,56px);width:auto;max-width:100%;display:block">
   <h1 data-t="title">SIMOPS Meeting Record</h1>
   <div class="rt"><div class="ver" id="verlbl"></div>
     <div class="lang"><button data-l="en">EN</button><button data-l="id">ID</button><button data-l="ms">MS</button></div><a id="homelnk" href="?home=1" data-t="homel" style="display:none;font-size:12px;color:var(--grey);text-decoration:underline;margin-top:4px">Home · Admin login</a></div>
@@ -95,7 +95,7 @@ canvas.pad{width:100%;height:clamp(90px,18vh,170px);border:1px dashed var(--grey
 <div id="peek"><img alt=""></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
-const VERSION='5.10.0';document.getElementById('verlbl').textContent='v'+VERSION;
+const VERSION='5.11.0';document.getElementById('verlbl').textContent='v'+VERSION;
 const API_URL='https://script.google.com/macros/s/AKfycbz9C-pbRRJ0Rf1EseelBe1IGp0FkydwoIZ0e1xoBgC_Wkxl7C7dkOhFh3c9v2EczQCMCA/exec';
 const CODES=['KKS','WEN','GSB','PBS','ECO','EOO','OT1','OT2'];
 const ROLES=[...CODES,'ack','noted'];
@@ -382,7 +382,7 @@ async function home(){
     $('#mk').onclick=async()=>{const r=await post({action:'create',session:sess,base:BASE,host:$('#h_host').value,date:$('#h_date').value,time:$('#h_time').value,hostEmails:$('#h_em').value,areas:[]});
       if(!r.ok){if(r.error==='session'){localStorage.removeItem('simopsSess');msg(t('nosess'));return home()}return msg(r.error||t('err'))}
       location.href=`${BASE}?m=${r.id}&ht=${r.ht}`};
-    post({action:'mine',session:sess}).then(r=>{if(r.ok&&r.items.length){$('#mine').innerHTML=`<div class="card"><h2>${t('mine')}</h2>${r.items.map(x=>`<div class="lk"><a class="btn sec mtg" href="${BASE}?m=${x.id}&ht=${x.ht}">${esc(x.date)} ${esc(x.time||'')} <span class="tag ${x.status==='done'?'ok':''}">${t('s_'+x.status)}</span></a> <button class="btn sec" data-del="${x.id}" data-st="${x.status}">${t('del')}</button></div>`).join('')}</div>`;bindDel()}});
+    post({action:'mine',session:sess}).then(r=>{if(r.ok&&r.items.length){$('#mine').innerHTML=`<div class="card"><h2>${t('mine')}</h2>${r.items.map(x=>`<div class="lk"><a class="btn sec mtg" href="${BASE}?m=${x.id}&ht=${x.ht}">${esc(x.date)} ${esc(x.time||'')} <span class="tag ${x.status==='done'?'ok':''}">${t('s_'+x.status)}</span></a>${x.status==='done'&&x.pdf?` <a class="btn" target="_blank" rel="noopener" href="${esc(x.pdf)}">PDF</a>`:''} <button class="btn sec" data-del="${x.id}" data-st="${x.status}">${t('del')}</button></div>`).join('')}</div>`;bindDel()}});
     $('#a_send').onclick=async()=>{const r=await post({action:'hostPinOtp',email:semail});if(!r.ok)return msg(r.error||t('err'));$('#a1').style.display='none';$('#a2').style.display='block';msg(t('codesent')+' '+semail)};
     $('#a_go').onclick=async()=>{const r=await post({action:'hostPinSet',email:semail,code:$('#a_code').value,pin:$('#a_new').value});if(!r.ok)return msg(r.error||t('err'));msg(t('pinok'));$('#a1').style.display='block';$('#a2').style.display='none';$('#a_code').value='';$('#a_new').value=''};
     try{new QRCode($('#qr'),{text:BASE,width:180,height:180})}catch(e){}
