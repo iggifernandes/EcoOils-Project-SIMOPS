@@ -1,4 +1,4 @@
-// VERSION: 4.8.3 - SIMOPS Meeting Record backend (single sign-in with per-party PIN set by email code, public record, email-OTP signatures, tamper-evident seal, map)
+// VERSION: 4.9.0 - SIMOPS Meeting Record backend (single sign-in with per-party PIN set by email code, public record, email-OTP signatures, tamper-evident seal, map)
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > put the HSSE host email(s) in HOST_EMAILS below >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -45,7 +45,7 @@ function newMeeting_(f) {
   const m = {
     id: rnd_(8), ht: rnd_(16), tok: {}, owner: f.owner, base: f.base,
     host: f.host, date: f.date, time: f.time, hostEmails: f.hostEmails, ackEmail: f.ackEmail || '', notedEmail: f.notedEmail || '', areas: f.areas || [],
-    status: 'open', con: {}, parts: [], sign: {}, photos: [], hostc: '', created: new Date().toISOString()
+    status: 'open', con: {}, att: {}, parts: [], sign: {}, photos: [], hostc: '', created: new Date().toISOString()
   };
   ROLES.forEach(function (r) { m.tok[r] = rnd_(16); });
   save_(m);
@@ -58,6 +58,8 @@ function openNext_(m) {
   if (isNaN(d.getTime())) d = new Date();
   const nd = Utilities.formatDate(new Date(d.getTime() + 86400000), 'Asia/Jakarta', 'yyyy-MM-dd');
   const n = newMeeting_({ owner: m.owner, base: m.base, host: m.host, date: nd, time: m.time, hostEmails: m.hostEmails, ackEmail: m.ackEmail, notedEmail: m.notedEmail, areas: m.areas });
+  const att = {}; CODES.forEach(function (c) { const a = (m.att && m.att[c]) || []; if (a.length) att[c] = a.map(function (x) { return { n: x.n, p: x.p, x: false }; }); });
+  n.att = att; save_(n);
   m.next = n.id;
   return n;
 }
@@ -68,10 +70,14 @@ function content_(m) {
     const e = m.con[c];
     if (e && m.parts.indexOf(c) >= 0) con[c] = { name: e.name, rows: e.rows.map(function (r) { return { area: r.area, activity: r.activity, details: r.details || '', constraint: r.constraint }; }) };
   });
-  return { id: m.id, host: m.host, date: m.date, time: m.time, parts: m.parts, con: con, hostc: m.hostc || '', photos: (m.photos || []).map(sha_) };
+  const out = { id: m.id, host: m.host, date: m.date, time: m.time, parts: m.parts, con: con, hostc: m.hostc || '', photos: (m.photos || []).map(sha_) };
+  const att = {};
+  CODES.forEach(function (c) { const a = (m.att && m.att[c]) || []; if (a.length) att[c] = a.map(function (x) { return { n: x.n, p: x.p, x: !!x.x }; }); });
+  if (Object.keys(att).length) out.att = att;   // only present when an attendance list exists, so older sealed records still verify
+  return out;
 }
 function contentHash_(m) { return sha_(JSON.stringify(content_(m))); }
-function sigHash_(who, s, H) { return sha_([who, s.name, s.emailFull, s.at, H, sha_(s.sign)].join('|')); }
+function sigHash_(who, s, H) { const parts = [who, s.name, s.emailFull, s.at, H, sha_(s.sign)]; if (s.pos) parts.push(s.pos); return sha_(parts.join('|')); }
 function required_(m) { return m.parts.concat(['ack', 'noted']); }
 function emailOf_(m, who) {
   const reg = roleEmails_()[who]; if (reg) return reg;
@@ -161,7 +167,7 @@ function verify_(id) {
   const Hnow = contentHash_(m);
   const sigs = Object.keys(m.sign).map(function (k) {
     const s = m.sign[k];
-    return { who: k, label: NAMES[k], name: s.name, email: mask_(s.emailFull), at: s.at, method: s.method, ok: sigHash_(k, s, m.H) === s.sh };
+    return { who: k, label: NAMES[k], name: s.name, pos: s.pos || '', email: mask_(s.emailFull), at: s.at, method: s.method, ok: sigHash_(k, s, m.H) === s.sh };
   });
   const contentOk = Hnow === m.H;
   let sealOk = null;
@@ -183,7 +189,7 @@ function doGet(e) {
     const items = rows.filter(function (r) { return r[4] !== 'open'; }).reverse().slice(0, 60).map(function (r) { return { id: r[0], date: r[1], time: r[2], host: r[3], status: r[4], parties: r[5], clashes: r[6] }; });
     return out_({ ok: true, items: items });
   }
-  return out_({ ok: true, version: '4.8.3' });
+  return out_({ ok: true, version: '4.9.0' });
 }
 
 function doPost(e) {
@@ -380,6 +386,16 @@ function handle_(b) {
     m.con[b.c] = { name: b.name || '', email: em, rows: b.rows || [], updated: new Date().toISOString() };
     save_(m); return { ok: true };
   }
+  if (b.action === 'people') {
+    const w = b.c;
+    if (CODES.indexOf(w) < 0 || !(isHost || roleAuth_(m, b))) return { ok: false, error: 'invalid sign-in' };
+    if (m.status !== 'open' && m.status !== 'discussion') return { ok: false, error: 'attendance is locked' };
+    const list = (Array.isArray(b.list) ? b.list : []).slice(0, 15).map(function (x) {
+      return { n: String((x && x.n) || '').trim().slice(0, 60), p: String((x && x.p) || '').trim().slice(0, 60), x: !!(x && x.x) };
+    }).filter(function (x) { return x.n; });
+    m.att = m.att || {}; m.att[w] = list;
+    save_(m); return { ok: true };
+  }
   if (b.action === 'status') {
     if (!isHost) return { ok: false, error: 'host only' };
     if (['open', 'discussion', 'signing'].indexOf(b.to) < 0) return { ok: false, error: 'bad status' };
@@ -419,8 +435,9 @@ function handle_(b) {
     if (m.status !== 'signing' || required_(m).indexOf(w) < 0) return { ok: false, error: 'not available' };
     if (m.sign[w]) return { ok: false, error: 'already signed' };
     if (!b.name || !b.sign) return { ok: false, error: 'name and signature required' };
+    if (!String(b.pos || '').trim()) return { ok: false, error: 'position required' };
     if (!otpCheck_('sign:' + m.id + ':' + w, b.code)) return { ok: false, error: 'wrong or expired code' };
-    const s = { name: String(b.name).trim(), emailFull: emailOf_(m, w), at: Utilities.formatDate(new Date(), 'Asia/Jakarta', "yyyy-MM-dd HH:mm 'WIB'"), method: 'Email one-time code', sign: b.sign };
+    const s = { name: String(b.name).trim(), emailFull: emailOf_(m, w), at: Utilities.formatDate(new Date(), 'Asia/Jakarta', "yyyy-MM-dd HH:mm 'WIB'"), method: 'Email one-time code', pos: String(b.pos).trim().slice(0, 60), sign: b.sign };
     s.sh = sigHash_(w, s, m.H);
     m.sign[w] = s;
     if (required_(m).every(function (r) { return m.sign[r]; })) {
@@ -444,29 +461,38 @@ function handle_(b) {
 function esc_(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 function pdfBlob_(m) {
   const cl = clashList_(m);
-  let h = '<html><body style="font-family:Arial;font-size:11px">';
-  h += '<h2 style="letter-spacing:3px;color:#555">SIMOPS MEETING RECORD</h2>';
+  const T = 'border="1" cellspacing="0" cellpadding="4" width="100%" style="border-collapse:collapse"';
+  let h = '<html><body style="font-family:Arial;font-size:11px;color:#111">';
+  h += '<h2 style="letter-spacing:3px;color:#555;margin-bottom:2px">SIMOPS MEETING RECORD</h2><div style="color:#777;font-size:9px;letter-spacing:2px">OFFICIAL ELECTRONIC RECORD</div>';
   h += '<p><b>Host:</b> ' + esc_(m.host) + ' &nbsp; <b>Date:</b> ' + esc_(m.date) + ' &nbsp; <b>Time:</b> ' + esc_(m.time) + '</p>';
   if (cl.length) h += '<p style="background:#fff3cd;padding:6px"><b>Possible clashes:</b><br>' + cl.map(esc_).join('<br>') + '</p>';
-  h += '<table border="1" cellspacing="0" cellpadding="4" width="100%"><tr style="background:#eee"><th>Contractor</th><th>Area</th><th>Planned activity</th><th>Agreed constraint</th><th>Signed by</th></tr>';
+  h += '<h3 style="margin-bottom:3px">1. Planned activities and constraints</h3>';
+  h += '<table ' + T + '><tr style="background:#eee"><th>Contractor</th><th>Area</th><th>Planned activity</th><th>Agreed constraint</th></tr>';
   CODES.forEach(function (c) {
     const rows = (m.con[c] && m.con[c].rows) || []; if (!rows.length) return;
-    const s = m.sign[c];
-    const sig = s ? esc_(s.name) + '<br><img src="' + s.sign + '" height="40"><br>' + esc_(s.at) + '<br>' + esc_(s.method) : '';
     rows.forEach(function (r, i) {
       h += '<tr>' + (i === 0 ? '<td rowspan="' + rows.length + '"><b>' + NAMES[c] + '</b></td>' : '') +
-        '<td>' + esc_(r.area) + '</td><td>' + esc_(r.activity) + (r.details ? '<br><i>' + esc_(r.details) + '</i>' : '') + '</td><td>' + esc_(r.constraint) + '</td>' +
-        (i === 0 ? '<td rowspan="' + rows.length + '">' + sig + '</td>' : '') + '</tr>';
+        '<td>' + esc_(r.area) + '</td><td>' + esc_(r.activity) + (r.details ? '<br><i>' + esc_(r.details) + '</i>' : '') + '</td><td>' + esc_(r.constraint) + '</td></tr>';
     });
   });
   h += '</table>';
-  if (m.photos && m.photos.length) h += '<p>' + m.photos.map(function (p) { return '<img src="' + p + '" height="140"> '; }).join('') + '</p>';
-  h += '<p><b>Host comments:</b> ' + esc_(m.hostc) + '</p>';
-  ['ack', 'noted'].forEach(function (k) {
-    const s = m.sign[k];
-    h += '<p><b>' + NAMES[k] + ':</b> ' + (s ? esc_(s.name) + ' <img src="' + s.sign + '" height="40"> ' + esc_(s.at) + ' (' + esc_(s.method) + ')' : '') + '</p>';
+  let anyAtt = false, ah = '<h3 style="margin-bottom:3px">2. Attendance</h3><table ' + T + '><tr style="background:#eee"><th>Company</th><th>Name</th><th>Position</th><th>Present</th></tr>';
+  CODES.forEach(function (c) {
+    const a = (m.att && m.att[c]) || []; if (!a.length) return; anyAtt = true;
+    a.forEach(function (x, i) { ah += '<tr>' + (i === 0 ? '<td rowspan="' + a.length + '"><b>' + NAMES[c] + '</b></td>' : '') + '<td>' + esc_(x.n) + '</td><td>' + esc_(x.p) + '</td><td align="center">' + (x.x ? 'Present' : 'Absent') + '</td></tr>'; });
   });
-  h += '<hr><p style="font-size:9px;color:#555">Electronic record. Content hash (SHA-256): ' + m.H + '<br>Seal: ' + m.seal + '<br>Verify online: ' + esc_(m.base) + '?v=' + m.id + '</p>';
+  if (anyAtt) h += ah + '</table>';
+  if (m.photos && m.photos.length) h += '<h3 style="margin-bottom:3px">3. Meeting photo</h3><p>' + m.photos.map(function (p) { return '<img src="' + p + '" height="140"> '; }).join('') + '</p>';
+  h += '<p><b>Host comments:</b> ' + esc_(m.hostc) + '</p>';
+  h += '<h3 style="margin-bottom:3px">4. Sign-off</h3><p style="font-size:9px;color:#555">Each signatory confirmed that they represent the company shown, attended the meeting, and that this record is accurate and agreed. Each signature was verified by a one-time code sent to the signatory\'s registered email and sealed to the content hash below.</p>';
+  h += '<table ' + T + '><tr style="background:#eee"><th>Company / role</th><th>Name and position</th><th>Signature</th><th>Verification</th></tr>';
+  required_(m).forEach(function (k) {
+    const s = m.sign[k];
+    h += '<tr><td><b>' + esc_(NAMES[k]) + '</b></td><td>' + (s ? esc_(s.name) + '<br><i>' + esc_(s.pos || '') + '</i>' : '') + '</td><td>' + (s ? '<img src="' + s.sign + '" height="40">' : '') + '</td><td style="font-size:9px">' +
+      (s ? '<b style="color:#1b7f3b">DIGITALLY SIGNED</b><br>' + esc_(s.at) + '<br>' + esc_(s.method) + '<br>' + esc_(mask_(s.emailFull)) + '<br>Ref ' + esc_(String(s.sh).slice(0, 12)) : '') + '</td></tr>';
+  });
+  h += '</table>';
+  h += '<hr><p style="font-size:9px;color:#555">Content hash (SHA-256): ' + m.H + '<br>Seal: ' + m.seal + '<br>Verify online: ' + esc_(m.base) + '?v=' + m.id + '</p>';
   h += '</body></html>';
   return Utilities.newBlob(h, 'text/html', 'SIMOPS.html').getAs('application/pdf').setName('SIMOPS_Meeting_Record_' + m.date + '.pdf');
 }
