@@ -1,4 +1,4 @@
-// VERSION: 5.2.1 - faster open: current returns the meeting in one call
+// VERSION: 5.3.0 - Admin sets EcoOils Rep / EcoOils HSSE PINs (adminSetPin); self-service PIN setting removed
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > put the HSSE host email(s) in HOST_EMAILS below >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -278,7 +278,8 @@ function handle_(b) {
     return { ok: true, session: sid, email: em };
   }
   // ----- party sign-in: one link/QR, party picks its name and enters its PIN -----
-  if (b.action === 'pinOtp') {
+  if (b.action === 'pinOtp' || b.action === 'pinSet') return { ok: false, error: 'PINs are set by the Admin' };
+  if (b.action === 'pinOtp_old') {
     if (ROLES.indexOf(b.role) < 0) return { ok: false, error: 'unknown party' };
     let e = roleEmails_()[b.role];
     if (!e) {  // first time: the party registers its own email (locked after the first PIN is set; host can reset)
@@ -289,7 +290,7 @@ function handle_(b) {
     otpSend_('pin:' + b.role, e, 'setting your SIMOPS PIN');
     return { ok: true, to: maskList_(e) };
   }
-  if (b.action === 'pinSet') {
+  if (b.action === 'pinSet_old') {
     if (ROLES.indexOf(b.role) < 0 || !/^\d{4,8}$/.test(String(b.pin))) return { ok: false, error: 'PIN must be 4 to 8 digits' };
     if (!otpCheck_('pin:' + b.role, b.code)) return { ok: false, error: 'wrong or expired code' };
     const pend = props_().getProperty('pending:' + b.role);
@@ -340,6 +341,18 @@ function handle_(b) {
       if (v) clean[ROLES[i]] = v;
     }
     props_().setProperty('roleEmails', JSON.stringify(clean));
+    return { ok: true };
+  }
+  if (b.action === 'adminSetPin') {   // Admin (host session) sets the EcoOils Rep / EcoOils HSSE email(s) and PIN
+    if (!sess_(b.session)) return { ok: false, error: 'session' };
+    if (ROLES.indexOf(b.role) < 0) return { ok: false, error: 'unknown role' };
+    const em = roleEmails_(), e = String(b.email || '').trim();
+    if (e) { if (!okEmails_(e)) return { ok: false, error: 'invalid email' }; em[b.role] = e; props_().setProperty('roleEmails', JSON.stringify(em)); }
+    if (b.pin) {
+      if (!/^\d{4,8}$/.test(String(b.pin))) return { ok: false, error: 'PIN must be 4 to 8 digits' };
+      props_().setProperty('pin:' + b.role, pinHash_(b.role, String(b.pin)));
+      CacheService.getScriptCache().remove('lock:' + b.role);
+    }
     return { ok: true };
   }
   if (b.action === 'pinReset') {
