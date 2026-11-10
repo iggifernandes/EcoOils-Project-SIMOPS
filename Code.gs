@@ -1,4 +1,4 @@
-// VERSION: 5.12.0 - "Others present" list (guests, visitors) entered by Admin, EcoOils Rep and EcoOils HSSE, sealed and shown on the PDF; Controls are now part of the sealed record
+// VERSION: 5.13.0 - EcoOils Rep and EcoOils HSSE sign with the sign-off code and a typed name (no drawn signature); typed name shown as the signature on the PDF; Others present; editable constraints and controls; signed PDF with logo, photo on page 2
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > Project Settings > Script properties > add HOST_EMAILS = the HSSE host email(s) >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -561,13 +561,13 @@ function handle_(b) {
     if (!(b.c === w && roleAuth_(m, b))) return { ok: false, error: 'invalid sign-in' };
     if (m.status !== 'signing' || required_(m).indexOf(w) < 0) return { ok: false, error: 'not available' };
     if (m.sign[w]) return { ok: false, error: 'already signed' };
-    if (!b.name || !b.sign) return { ok: false, error: 'name and signature required' };
+    if (!b.name || (!b.sign && !(m.v === 2 && CTL.indexOf(w) >= 0))) return { ok: false, error: 'name required' };   // EcoOils Rep / HSSE sign with their code and a typed name: no drawn signature
     if (!String(b.pos || '').trim()) return { ok: false, error: 'position required' };
     const asRep = (m.v === 2 && w === 'ack') ? String(b.as || '') : '';
     if (m.v === 2 && w === 'ack' && asRep !== 'ECO' && asRep !== 'EOO') return { ok: false, error: 'choose EcoOils Project Rep or EcoOils Operations Rep' };
     const byCode = m.v === 2 && CTL.indexOf(w) >= 0;   // signed in with the sign-off code set by the Admin: no email step
     if (!byCode && !otpCheck_('sign:' + m.id + ':' + w, b.code)) return { ok: false, error: 'wrong or expired code' };
-    const s = { name: String(b.name).trim(), emailFull: byCode ? (emailOf_(m, w) || '') : emailOf_(m, w), at: Utilities.formatDate(new Date(), 'Asia/Jakarta', "yyyy-MM-dd HH:mm 'WIB'"), method: byCode ? 'Sign-off code' : 'Email one-time code', pos: String(b.pos).trim().slice(0, 60), sign: b.sign };
+    const s = { name: String(b.name).trim(), emailFull: byCode ? (emailOf_(m, w) || '') : emailOf_(m, w), at: Utilities.formatDate(new Date(), 'Asia/Jakarta', "yyyy-MM-dd HH:mm 'WIB'"), method: byCode ? 'Sign-off code' : 'Email one-time code', pos: String(b.pos).trim().slice(0, 60), sign: b.sign || '' };
     if (asRep) s.as = asRep;
     s.sh = sigHash_(w, s, m.H);
     m.sign[w] = s;
@@ -631,12 +631,12 @@ function pdfHtml_(m) {
   if (m.hostc) h += H3(3, 'HOST COMMENTS') + '<p style="margin:2px 0;border-left:3px solid ' + LN + ';padding-left:8px">' + esc_(m.hostc).replace(/\n/g, '<br>') + '</p>';
   h += '<div style="page-break-inside:avoid">' + H3(4, 'SIGN-OFF');
   const byCode = (m.v === 2);
-  h += '<p style="font-size:9px;color:' + GR + ';margin:2px 0 6px 0">Each signatory confirmed that they represent the contractor or party shown, attended the meeting, and that this record is accurate and agreed. ' + (byCode ? 'Each signature was made with the personal sign-off code issued by the HSSE Admin' : 'Each signature was verified by a one-time code sent to the signatory\'s registered email') + ' and is sealed to the content hash below.</p>';
+  h += '<p style="font-size:9px;color:' + GR + ';margin:2px 0 6px 0">Each signatory confirmed that they represent the contractor or party shown, attended the meeting, and that this record is accurate and agreed. ' + (byCode ? 'Each signature was made with the sign-off code issued by the HSSE Admin and the signatory\'s typed name' : 'Each signature was verified by a one-time code sent to the signatory\'s registered email') + ' and is sealed to the content hash below.</p>';
   h += '<table ' + T + '><tr><th ' + TH + '>ROLE</th><th ' + TH + '>NAME AND POSITION</th><th ' + TH + '>SIGNATURE</th><th ' + TH + '>VERIFICATION</th></tr>';
   (m.v === 2 ? ['ack', 'noted'] : required_(m)).forEach(function (k) {
     const s = m.sign[k], ab = m.absent && m.absent[k];
     if (ab) { h += '<tr><td ' + TD + '><b>' + esc_(NAMES[k]) + '</b></td><td ' + TD + ' colspan="3"><i>Not present at the meeting</i> (marked by ' + esc_(NAMES[ab.by]) + ', ' + esc_(ab.at) + ')</td></tr>'; return; }
-    h += '<tr><td ' + TD + '>' + (s && s.as ? '<b>' + esc_(NAMES[s.as]) + ' Rep</b><br><span style="font-size:9px">Acknowledged</span>' : '<b>' + esc_(NAMES[k]) + '</b>') + '</td><td ' + TD + '>' + (s ? '<b>' + esc_(s.name) + '</b><br><i>' + esc_(s.pos || '') + '</i>' : '') + '</td><td ' + TD + '>' + (s ? '<img src="' + s.sign + '" height="42">' : '') + '</td><td ' + TD + ' style="font-size:8.5px">' +
+    h += '<tr><td ' + TD + '>' + (s && s.as ? '<b>' + esc_(NAMES[s.as]) + ' Rep</b><br><span style="font-size:9px">Acknowledged</span>' : '<b>' + esc_(NAMES[k]) + '</b>') + '</td><td ' + TD + '>' + (s ? '<b>' + esc_(s.name) + '</b><br><i>' + esc_(s.pos || '') + '</i>' : '') + '</td><td ' + TD + '>' + (s ? (s.sign ? '<img src="' + s.sign + '" height="42">' : '<i style="font-family:Times New Roman,serif;font-size:17px;color:#1a2a6c">' + esc_(s.name) + '</i>') : '') + '</td><td ' + TD + ' style="font-size:8.5px">' +
       (s ? '<b style="color:' + G + '">DIGITALLY SIGNED</b><br>' + esc_(s.at) + '<br>' + esc_(s.method) + (s.emailFull ? '<br>' + esc_(mask_(s.emailFull)) : '') + '<br>Ref ' + esc_(String(s.sh).slice(0, 12)) : '') + '</td></tr>';
   });
   h += '</table></div>';
