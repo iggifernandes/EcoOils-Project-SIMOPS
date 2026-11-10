@@ -596,7 +596,7 @@ function pdfHtml_(m) {
   (m.v === 2 ? ['ack', 'noted'] : required_(m)).forEach(function (k) {
     const s = m.sign[k], ab = m.absent && m.absent[k];
     if (ab) { h += '<tr><td ' + TD + '><b>' + esc_(NAMES[k]) + '</b></td><td ' + TD + ' colspan="3"><i>Not present at the meeting</i> (marked by ' + esc_(NAMES[ab.by]) + ', ' + esc_(ab.at) + ')</td></tr>'; return; }
-    h += '<tr><td ' + TD + '><b>' + esc_(NAMES[k]) + '</b>' + (s && s.as ? '<br><span style="font-size:9px">' + esc_(NAMES[s.as]) + ' Rep</span>' : '') + '</td><td ' + TD + '>' + (s ? '<b>' + esc_(s.name) + '</b><br><i>' + esc_(s.pos || '') + '</i>' : '') + '</td><td ' + TD + '>' + (s ? '<img src="' + s.sign + '" height="42">' : '') + '</td><td ' + TD + ' style="font-size:8.5px">' +
+    h += '<tr><td ' + TD + '>' + (s && s.as ? '<b>' + esc_(NAMES[s.as]) + ' Rep</b><br><span style="font-size:9px">Acknowledged</span>' : '<b>' + esc_(NAMES[k]) + '</b>') + '</td><td ' + TD + '>' + (s ? '<b>' + esc_(s.name) + '</b><br><i>' + esc_(s.pos || '') + '</i>' : '') + '</td><td ' + TD + '>' + (s ? '<img src="' + s.sign + '" height="42">' : '') + '</td><td ' + TD + ' style="font-size:8.5px">' +
       (s ? '<b style="color:' + G + '">DIGITALLY SIGNED</b><br>' + esc_(s.at) + '<br>' + esc_(s.method) + (s.emailFull ? '<br>' + esc_(mask_(s.emailFull)) : '') + '<br>Ref ' + esc_(String(s.sh).slice(0, 12)) : '') + '</td></tr>';
   });
   h += '</table></div>';
