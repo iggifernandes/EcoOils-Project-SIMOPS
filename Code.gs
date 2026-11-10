@@ -1,4 +1,4 @@
-// VERSION: 5.10.0 - Admin, EcoOils Rep and EcoOils HSSE can edit and add constraints until signing starts; EcoOils Rep signs as Project or Operations Rep; signed PDF with logo, photo on page 2
+// VERSION: 5.11.0 - constraints and free-writing Controls can be edited per activity (Admin, EcoOils Rep, EcoOils HSSE) until signing starts; Controls shown on the PDF
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > Project Settings > Script properties > add HOST_EMAILS = the HSSE host email(s) >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -487,15 +487,16 @@ function handle_(b) {
     (Array.isArray(b.edits) ? b.edits : []).forEach(function (e) {
       const rows = e && m.con[e.c] && m.con[e.c].rows, i = e ? parseInt(e.i, 10) : -1;
       if (!rows || !(i >= 0 && i < rows.length)) return;
-      const v = String(e.constraint || '').trim().slice(0, 300);
-      if (v !== String(rows[i].constraint || '')) { rows[i].constraint = v; rows[i].ed = by; n++; }
+      const v = String(e.constraint || '').trim().slice(0, 300), ct = String(e.controls || '').trim().slice(0, 1000);
+      if (v !== String(rows[i].constraint || '') || ct !== String(rows[i].controls || '')) { rows[i].constraint = v; rows[i].controls = ct; rows[i].ed = by; n++; }
     });
     (Array.isArray(b.adds) ? b.adds : []).slice(0, 20).forEach(function (a) {
       if (!a || CODES.indexOf(a.c) < 0) return;
       const act = String(a.activity || '').trim().slice(0, 200), cons = String(a.constraint || '').trim().slice(0, 300);
-      if (!act || !cons) return;
+      const ctl2 = String(a.controls || '').trim().slice(0, 1000);
+      if (!act || !(cons || ctl2)) return;
       m.con[a.c] = m.con[a.c] || { name: '', rows: [] };
-      m.con[a.c].rows = (m.con[a.c].rows || []).concat([{ area: String(a.area || '').trim().toUpperCase().slice(0, 100), activity: act, details: '', constraint: cons, ed: by }]);
+      m.con[a.c].rows = (m.con[a.c].rows || []).concat([{ area: String(a.area || '').trim().toUpperCase().slice(0, 100), activity: act, details: '', constraint: cons, controls: ctl2, ed: by }]);
       n++;
     });
     if (n) m.log = (m.log || []).concat([{ at: new Date().toISOString(), c: 'constraints', by: by }]).slice(-40);
@@ -596,12 +597,12 @@ function pdfHtml_(m) {
   h += '<table ' + T + ' style="margin-top:8px"><tr><td ' + TD + '><span style="color:#777777;font-size:8px">HOST</span><br><b>' + esc_(m.host) + '</b></td><td ' + TD + '><span style="color:#777777;font-size:8px">DATE</span><br><b>' + esc_(dt) + '</b></td><td ' + TD + '><span style="color:#777777;font-size:8px">TIME</span><br><b>' + esc_(m.time) + '</b></td><td ' + TD + '><span style="color:#777777;font-size:8px">CONTRACTORS</span><br><b>' + (m.parts || []).length + '</b></td></tr></table>';
   if (cl.length) h += '<p style="background:#fff3cd;padding:6px;border:1px solid #e6c200;margin:8px 0"><b>Possible clashes to manage:</b><br>' + cl.map(esc_).join('<br>') + '</p>';
   h += H3(1, 'PLANNED ACTIVITIES AND AGREED CONSTRAINTS');
-  h += '<table ' + T + '><tr><th ' + TH + '>CONTRACTOR</th><th ' + TH + '>AREA</th><th ' + TH + '>PLANNED ACTIVITY</th><th ' + TH + '>AGREED CONSTRAINT</th></tr>';
+  h += '<table ' + T + '><tr><th ' + TH + '>CONTRACTOR</th><th ' + TH + '>AREA</th><th ' + TH + '>PLANNED ACTIVITY</th><th ' + TH + '>AGREED CONSTRAINT AND CONTROLS</th></tr>';
   CODES.forEach(function (c) {
     const rows = (m.con[c] && m.con[c].rows) || []; if (!rows.length) return;
     rows.forEach(function (r, i) {
       h += '<tr>' + (i === 0 ? '<td ' + TD + ' rowspan="' + rows.length + '"><b>' + esc_(NAMES[c]) + '</b>' + (m.con[c].name ? '<br><span style="font-size:8px;color:#777777">entered by ' + esc_(m.con[c].name) + '</span>' : '') + '</td>' : '') +
-        '<td ' + TD + '>' + esc_(r.area) + '</td><td ' + TD + '>' + esc_(r.activity) + (r.details ? '<br><i style="color:#555555">' + esc_(r.details) + '</i>' : '') + '</td><td ' + TD + '>' + esc_(r.constraint) + '</td></tr>';
+        '<td ' + TD + '>' + esc_(r.area) + '</td><td ' + TD + '>' + esc_(r.activity) + (r.details ? '<br><i style="color:#555555">' + esc_(r.details) + '</i>' : '') + '</td><td ' + TD + '>' + esc_(r.constraint) + (r.controls ? '<br><b>Controls:</b> ' + esc_(r.controls).replace(/\n/g, '<br>') : '') + (r.ed ? '<br><span style="font-size:8px;color:#777777">updated by ' + esc_(r.ed) + '</span>' : '') + '</td></tr>';
     });
   });
   h += '</table>';
