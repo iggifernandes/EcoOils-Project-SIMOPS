@@ -1,4 +1,4 @@
-// VERSION: 5.11.0 - constraints and free-writing Controls can be edited per activity (Admin, EcoOils Rep, EcoOils HSSE) until signing starts; Controls shown on the PDF
+// VERSION: 5.12.0 - "Others present" list (guests, visitors) entered by Admin, EcoOils Rep and EcoOils HSSE, sealed and shown on the PDF; Controls are now part of the sealed record
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > Project Settings > Script properties > add HOST_EMAILS = the HSSE host email(s) >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -86,11 +86,12 @@ function content_(m) {
   const con = {};
   CODES.forEach(function (c) {
     const e = m.con[c];
-    if (e && m.parts.indexOf(c) >= 0) con[c] = { name: e.name, rows: e.rows.map(function (r) { return { area: r.area, activity: r.activity, details: r.details || '', constraint: r.constraint }; }) };
+    if (e && m.parts.indexOf(c) >= 0) con[c] = { name: e.name, rows: e.rows.map(function (r) { var o = { area: r.area, activity: r.activity, details: r.details || '', constraint: r.constraint }; if (r.controls) o.controls = r.controls; return o; }) };
   });
   const out = { id: m.id, host: m.host, date: m.date, time: m.time, parts: m.parts, con: con, hostc: m.hostc || '', photos: (m.photos || []).map(sha_) };
   const att = {};
   CODES.forEach(function (c) { const a = (m.att && m.att[c]) || []; if (a.length) att[c] = a.map(function (x) { return { n: x.n, p: x.p, x: !!x.x }; }); });
+  if (m.others && m.others.length) out.others = m.others.map(function (x) { return { n: x.n, o: x.o || '', p: x.p || '' }; });   // only present when entered, so older sealed records still verify
   if (Object.keys(att).length) out.att = att;   // only present when an attendance list exists, so older sealed records still verify
   return out;
 }
@@ -502,6 +503,16 @@ function handle_(b) {
     if (n) m.log = (m.log || []).concat([{ at: new Date().toISOString(), c: 'constraints', by: by }]).slice(-40);
     save_(m, true); return Object.assign({ ok: true, changed: n }, view_(m, b));
   }
+  if (b.action === 'others') {   // Admin, EcoOils Rep and EcoOils HSSE record anyone else who was present (guests, visitors, other departments)
+    const ctl = CTL.indexOf(b.c) >= 0 && roleAuth_(m, b);
+    if (m.v !== 2 || !(isHost || ctl)) return { ok: false, error: 'invalid sign-in' };
+    if (m.status !== 'open' && m.status !== 'discussion') return { ok: false, error: 'the list is locked once signing starts' };
+    m.others = (Array.isArray(b.list) ? b.list : []).slice(0, 30).map(function (x) {
+      return { n: String((x && x.n) || '').trim().slice(0, 80), o: String((x && x.o) || '').trim().slice(0, 80), p: String((x && x.p) || '').trim().slice(0, 80) };
+    }).filter(function (x) { return x.n; });
+    m.log = (m.log || []).concat([{ at: new Date().toISOString(), c: 'others', by: isHost ? 'Admin' : (b.c === 'ack' ? 'EcoOils Rep' : 'EcoOils HSSE') }]).slice(-40);
+    save_(m, true); return Object.assign({ ok: true }, view_(m, b));
+  }
   if (b.action === 'people') {
     const w = b.c;
     if (CODES.indexOf(w) < 0 || !(isHost || m.v === 2 || roleAuth_(m, b))) return { ok: false, error: 'invalid sign-in' };
@@ -612,6 +623,11 @@ function pdfHtml_(m) {
     a.forEach(function (x, i) { ah += '<tr>' + (i === 0 ? '<td ' + TD + ' rowspan="' + a.length + '"><b>' + esc_(NAMES[c]) + '</b></td>' : '') + '<td ' + TD + '>' + esc_(x.n) + '</td><td ' + TD + '>' + esc_(x.p) + '</td><td ' + TD + ' align="center">' + (x.x ? '<b style="color:' + G + '">Present</b>' : 'Absent') + '</td></tr>'; });
   });
   if (anyAtt) h += ah + '</table>';
+  if (m.others && m.others.length) {
+    h += H3('', 'OTHERS PRESENT') + '<table ' + T + '><tr><th ' + TH + '>NAME</th><th ' + TH + '>ORGANISATION / DEPARTMENT</th><th ' + TH + '>POSITION</th></tr>';
+    m.others.forEach(function (x) { h += '<tr><td ' + TD + '>' + esc_(x.n) + '</td><td ' + TD + '>' + esc_(x.o) + '</td><td ' + TD + '>' + esc_(x.p) + '</td></tr>'; });
+    h += '</table>';
+  }
   if (m.hostc) h += H3(3, 'HOST COMMENTS') + '<p style="margin:2px 0;border-left:3px solid ' + LN + ';padding-left:8px">' + esc_(m.hostc).replace(/\n/g, '<br>') + '</p>';
   h += '<div style="page-break-inside:avoid">' + H3(4, 'SIGN-OFF');
   const byCode = (m.v === 2);
