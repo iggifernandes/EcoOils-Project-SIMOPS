@@ -1,4 +1,4 @@
-// VERSION: 4.9.1 - SIMOPS Meeting Record backend (single sign-in with per-party PIN set by email code, public record, email-OTP signatures, tamper-evident seal, map)
+// VERSION: 5.1.0 - SIMOPS Meeting Record backend (single sign-in with per-party PIN set by email code, public record, email-OTP signatures, tamper-evident seal, map)
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > put the HSSE host email(s) in HOST_EMAILS below >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -29,6 +29,10 @@ function load_(id) { const f = file_(id); return f ? JSON.parse(f.getBlob().getD
 function sha_(s) { return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, s, Utilities.Charset.UTF_8).map(function (b) { return ('0' + (b & 255).toString(16)).slice(-2); }).join(''); }
 function rnd_(n) { return Utilities.getUuid().replace(/-/g, '').slice(0, n); }
 function mask_(e) { if (!e) return ''; const p = e.split('@'); return p[0].slice(0, 1) + '***@' + (p[1] || ''); }
+const CTL = ['ack', 'noted'];
+function emails_(v) { return String(v || '').split(/[,;\s]+/).filter(function (x) { return x; }); }
+function okEmails_(v) { const l = emails_(v); return l.length > 0 && l.every(okEmail_); }
+function maskList_(v) { return emails_(v).map(mask_).join(', '); }
 function okEmail_(e) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e || ''); }
 
 // ---------- clash detection (same area name chosen by two different parties) ----------
@@ -51,7 +55,7 @@ function newMeeting_(f) {
   const m = {
     id: rnd_(8), ht: rnd_(16), tok: {}, owner: f.owner, base: f.base,
     host: f.host, date: f.date, time: f.time, hostEmails: f.hostEmails, ackEmail: f.ackEmail || '', notedEmail: f.notedEmail || '', areas: f.areas || [],
-    status: 'open', con: {}, att: {}, parts: [], sign: {}, photos: [], hostc: '', created: new Date().toISOString()
+    v: 2, status: 'open', con: {}, att: {}, log: [], parts: [], sign: {}, photos: [], hostc: '', created: new Date().toISOString()
   };
   ROLES.forEach(function (r) { m.tok[r] = rnd_(16); });
   save_(m);
@@ -84,7 +88,24 @@ function content_(m) {
 }
 function contentHash_(m) { return sha_(JSON.stringify(content_(m))); }
 function sigHash_(who, s, H) { const parts = [who, s.name, s.emailFull, s.at, H, sha_(s.sign)]; if (s.pos) parts.push(s.pos); return sha_(parts.join('|')); }
-function required_(m) { return m.parts.concat(['ack', 'noted']); }
+function required_(m) {
+  if (m.v !== 2) return m.parts.concat(['ack', 'noted']);
+  return ['ack', 'noted'].filter(function (r) { return !(m.absent && m.absent[r]); });   // a role marked "not present" by the other does not sign
+}
+function sealOf_(m) {
+  const base = m.H + '|' + required_(m).map(function (k) { return m.sign[k] && m.sign[k].sh; }).join(',');
+  return sha_(m.absent && Object.keys(m.absent).length ? base + '|' + JSON.stringify(m.absent) : base);
+}
+function finish_(m) {   // complete the record as soon as everybody who is present has signed
+  if (m.status !== 'signing' || !required_(m).length || !required_(m).every(function (r) { return m.sign[r]; })) return false;
+  m.seal = sealOf_(m);
+  m.sealedAt = new Date().toISOString();
+  m.status = 'done';
+  m.pdf = makePdf_(m).getUrl();
+  openNext_(m);
+  save_(m); sendPdf_(m);
+  return true;
+}
 function emailOf_(m, who) {
   const reg = roleEmails_()[who]; if (reg) return reg;
   if (who === 'ack') return m.ackEmail; if (who === 'noted') return m.notedEmail;
@@ -96,7 +117,7 @@ function otpSend_(key, email, purpose) {
   const code = ('000000' + (parseInt(rnd_(8), 16) % 1000000)).slice(-6);
   const cache = CacheService.getScriptCache();
   cache.put('otp:' + key, code, 600); cache.put('tries:' + key, '0', 600);
-  MailApp.sendEmail({ to: email, subject: 'SIMOPS verification code', body: 'Your verification code for ' + purpose + ' is ' + code + '. It is valid for 10 minutes. If you did not request it, ignore this email.' });
+  MailApp.sendEmail({ to: emails_(email).join(','), subject: 'SIMOPS verification code', body: 'Your verification code for ' + purpose + ' is ' + code + '. It is valid for 10 minutes. If you did not request it, ignore this email.' });
 }
 function otpCheck_(key, code) {
   const cache = CacheService.getScriptCache();
@@ -153,16 +174,16 @@ function save_(m) {
 }
 function view_(m, p) {
   const host = !!(p.ht && p.ht === m.ht);
-  const who = (p.c && ((m.tok[p.c] && m.tok[p.c] === p.t) || (p.s && csess_(p.s) === p.c))) ? p.c : null;
+  const who = (p.c && ((m.v === 2 && CODES.indexOf(p.c) >= 0) || (m.tok[p.c] && m.tok[p.c] === p.t) || (p.s && csess_(p.s) === p.c))) ? p.c : null;
   const c = JSON.parse(JSON.stringify(m));
   delete c.ht; delete c.tok; delete c.owner;
   if (!host) {
     delete c.hostEmails; delete c.ackEmail; delete c.notedEmail;
     CODES.forEach(function (k) { if (c.con[k]) delete c.con[k].email; });
     if (who && CODES.indexOf(who) >= 0 && m.con[who]) c.con[who].email = m.con[who].email;
-    if (m.status === 'open' && !who) c.con = {};
+    if (m.status === 'open' && !who && m.v !== 2) c.con = {};
   }
-  Object.keys(c.sign || {}).forEach(function (k) { c.sign[k].email = mask_(c.sign[k].emailFull); delete c.sign[k].emailFull; });
+  Object.keys(c.sign || {}).forEach(function (k) { c.sign[k].email = maskList_(c.sign[k].emailFull); delete c.sign[k].emailFull; });
   if (host) c.tok = m.tok;
   return { ok: true, meeting: c, role: host ? 'host' : (who ? 'con' : 'public'), who: who };
 }
@@ -173,12 +194,12 @@ function verify_(id) {
   const Hnow = contentHash_(m);
   const sigs = Object.keys(m.sign).map(function (k) {
     const s = m.sign[k];
-    return { who: k, label: NAMES[k], name: s.name, pos: s.pos || '', email: mask_(s.emailFull), at: s.at, method: s.method, ok: sigHash_(k, s, m.H) === s.sh };
+    return { who: k, label: NAMES[k], name: s.name, pos: s.pos || '', email: maskList_(s.emailFull), at: s.at, method: s.method, ok: sigHash_(k, s, m.H) === s.sh };
   });
   const contentOk = Hnow === m.H;
   let sealOk = null;
-  if (m.seal) sealOk = sha_(m.H + '|' + required_(m).map(function (k) { return m.sign[k] && m.sign[k].sh; }).join(',')) === m.seal;
-  return { ok: true, sealed: true, status: m.status, contentOk: contentOk, sealOk: sealOk, H: m.H, seal: m.seal || '', sigs: sigs, required: required_(m).length };
+  if (m.seal) sealOk = sealOf_(m) === m.seal;
+  return { ok: true, absent: m.absent || {}, sealed: true, status: m.status, contentOk: contentOk, sealOk: sealOk, H: m.H, seal: m.seal || '', sigs: sigs, required: required_(m).length };
 }
 
 function doGet(e) {
@@ -189,6 +210,13 @@ function doGet(e) {
     return out_(view_(m, p));
   }
   if (p.action === 'verify') return out_(verify_(p.id));
+  if (p.action === 'current') {   // the meeting contractors should open: the latest one that is not finished
+    const sh = sheet_(), last = sh.getLastRow();
+    const rows = last > 1 ? sh.getRange(2, 1, last - 1, 5).getValues() : [];
+    let best = null;
+    rows.forEach(function (r) { if (r[4] !== 'done' && (!best || String(r[1]) >= String(best[1]))) best = r; });
+    return out_(best ? { ok: true, id: best[0], date: best[1], time: best[2], status: best[4] } : { ok: true, id: '' });
+  }
   if (p.action === 'list') {
     const sh = sheet_(), last = sh.getLastRow();
     const rows = last > 1 ? sh.getRange(2, 1, last - 1, 7).getValues() : [];
@@ -252,11 +280,11 @@ function handle_(b) {
     let e = roleEmails_()[b.role];
     if (!e) {  // first time: the party registers its own email (locked after the first PIN is set; host can reset)
       e = String(b.email || '').trim();
-      if (!okEmail_(e)) return { ok: false, error: 'enter your email address' };
+      if (!okEmails_(e)) return { ok: false, error: 'enter your email address' };
       props_().setProperty('pending:' + b.role, e);
     }
     otpSend_('pin:' + b.role, e, 'setting your SIMOPS PIN');
-    return { ok: true, to: mask_(e) };
+    return { ok: true, to: maskList_(e) };
   }
   if (b.action === 'pinSet') {
     if (ROLES.indexOf(b.role) < 0 || !/^\d{4,8}$/.test(String(b.pin))) return { ok: false, error: 'PIN must be 4 to 8 digits' };
@@ -305,7 +333,7 @@ function handle_(b) {
     const clean = {};
     for (let i = 0; i < ROLES.length; i++) {
       const v = String((b.emails || {})[ROLES[i]] || '').trim();
-      if (v && !okEmail_(v)) return { ok: false, error: 'invalid email for ' + NAMES[ROLES[i]] };
+      if (v && !okEmails_(v)) return { ok: false, error: 'invalid email for ' + NAMES[ROLES[i]] };
       if (v) clean[ROLES[i]] = v;
     }
     props_().setProperty('roleEmails', JSON.stringify(clean));
@@ -340,7 +368,7 @@ function handle_(b) {
   if (b.action === 'get') return view_(m, b);
   // ----- AI wording check (free Gemini tier; key lives in Script Properties as GEMINI_API_KEY, never in code) -----
   if (b.action === 'polish') {
-    if (!(isHost || roleAuth_(m, b))) return { ok: false, error: 'invalid sign-in' };
+    if (!(isHost || roleAuth_(m, b) || (m.v === 2 && CODES.indexOf(b.c) >= 0))) return { ok: false, error: 'choose your company first' };
     if (m.status !== 'open' && !isHost) return { ok: false, error: 'entries are locked' };
     const key = props_().getProperty('GEMINI_API_KEY');
     if (!key) return { ok: false, error: 'AI wording check is not set up yet (ask HSSE)' };
@@ -378,10 +406,21 @@ function handle_(b) {
     return { ok: true, texts: res2 };
   }
 
+  const isCtl = isHost || (CTL.indexOf(b.c) >= 0 && roleAuth_(m, b));   // host, HOD (ack) or HSSE (noted) signed in with their PIN
   if (b.action === 'meta') {
-    if (!isHost) return { ok: false, error: 'host only' };
+    if (!isHost && !(isCtl && b.hostc !== undefined)) return { ok: false, error: 'host only' };
+    if (!isHost) b = { action: 'meta', id: b.id, hostc: String(b.hostc || '').slice(0, 2000) };
     if (m.status === 'signing' || m.status === 'done') return { ok: false, error: 'record is locked for signing' };
     ['host', 'date', 'time', 'hostEmails', 'ackEmail', 'notedEmail', 'areas', 'hostc'].forEach(function (k) { if (b[k] !== undefined) m[k] = b[k]; });
+    save_(m); return { ok: true };
+  }
+  if (b.action === 'entry' && m.v === 2) {   // open entry: no PIN, any contractor of the company can update until the discussion starts
+    if (CODES.indexOf(b.c) < 0) return { ok: false, error: 'choose your company' };
+    if (m.status !== 'open') return { ok: false, error: 'entries are locked' };
+    const nm = String(b.name || '').trim().slice(0, 60);
+    if (!nm) return { ok: false, error: 'enter your name' };
+    m.con[b.c] = { name: nm, rows: b.rows || [], updated: new Date().toISOString() };
+    m.log = (m.log || []).concat([{ at: new Date().toISOString(), c: b.c, by: nm }]).slice(-40);
     save_(m); return { ok: true };
   }
   if (b.action === 'entry') {
@@ -394,7 +433,7 @@ function handle_(b) {
   }
   if (b.action === 'people') {
     const w = b.c;
-    if (CODES.indexOf(w) < 0 || !(isHost || roleAuth_(m, b))) return { ok: false, error: 'invalid sign-in' };
+    if (CODES.indexOf(w) < 0 || !(isHost || m.v === 2 || roleAuth_(m, b))) return { ok: false, error: 'invalid sign-in' };
     if (m.status !== 'open' && m.status !== 'discussion') return { ok: false, error: 'attendance is locked' };
     const list = (Array.isArray(b.list) ? b.list : []).slice(0, 15).map(function (x) {
       return { n: String((x && x.n) || '').trim().slice(0, 60), p: String((x && x.p) || '').trim().slice(0, 60), x: !!(x && x.x) };
@@ -403,26 +442,26 @@ function handle_(b) {
     save_(m); return { ok: true };
   }
   if (b.action === 'status') {
-    if (!isHost) return { ok: false, error: 'host only' };
+    if (!isCtl) return { ok: false, error: 'HOD, HSSE or host only' };
     if (['open', 'discussion', 'signing'].indexOf(b.to) < 0) return { ok: false, error: 'bad status' };
     if (m.status === 'done') return { ok: false, error: 'completed' };
     if (m.status === 'signing' && Object.keys(m.sign).length) return { ok: false, error: 'signing already started' };
-    if (b.to === 'open' && m.status === 'signing') return { ok: false, error: 'go back to discussion first' };
+    if (b.to !== 'signing') delete m.absent;
     if (b.to !== 'open') {
       m.parts = CODES.filter(function (c) { return m.con[c] && m.con[c].rows && m.con[c].rows.length; });
       if (!m.parts.length) return { ok: false, error: 'no entries yet' };
     }
     if (b.to === 'signing') {
       if (!(m.photos || []).length) return { ok: false, error: 'a meeting photo is required before signing' };
-      const miss = required_(m).filter(function (r) { return !okEmail_(emailOf_(m, r)); });
+      const miss = required_(m).filter(function (r) { return !okEmails_(emailOf_(m, r)); });
       if (miss.length) return { ok: false, error: 'email missing for: ' + miss.map(function (r) { return NAMES[r]; }).join(', ') };
       m.H = contentHash_(m); m.frozenAt = new Date().toISOString();
     } else { delete m.H; delete m.frozenAt; }
     m.status = b.to; save_(m); return { ok: true };
   }
   if (b.action === 'photo') {
-    if (!(isHost || roleAuth_(m, b))) return { ok: false, error: 'invalid sign-in' };
-    if (m.status !== 'discussion') return { ok: false, error: 'photo can be added during discussion only' };
+    if (!(isHost || roleAuth_(m, b) || (m.v === 2 && CODES.indexOf(b.c) >= 0))) return { ok: false, error: 'choose your company first' };
+    if (m.status !== 'discussion' && !(m.v === 2 && m.status === 'open')) return { ok: false, error: 'photo can be added before signing only' };
     if (m.photos.length >= 4) return { ok: false, error: 'max 4 photos' };
     m.photos.push(b.data); save_(m); return { ok: true };
   }
@@ -433,7 +472,7 @@ function handle_(b) {
     if (m.sign[w]) return { ok: false, error: 'already signed' };
     const em = emailOf_(m, w);
     otpSend_('sign:' + m.id + ':' + w, em, 'signing the SIMOPS record of ' + m.date);
-    return { ok: true, to: mask_(em) };
+    return { ok: true, to: maskList_(em) };
   }
   if (b.action === 'sign') {
     const w = b.who;
@@ -446,14 +485,17 @@ function handle_(b) {
     const s = { name: String(b.name).trim(), emailFull: emailOf_(m, w), at: Utilities.formatDate(new Date(), 'Asia/Jakarta', "yyyy-MM-dd HH:mm 'WIB'"), method: 'Email one-time code', pos: String(b.pos).trim().slice(0, 60), sign: b.sign };
     s.sh = sigHash_(w, s, m.H);
     m.sign[w] = s;
-    if (required_(m).every(function (r) { return m.sign[r]; })) {
-      m.seal = sha_(m.H + '|' + required_(m).map(function (r) { return m.sign[r].sh; }).join(','));
-      m.sealedAt = new Date().toISOString();
-      m.status = 'done';
-      m.pdf = makePdf_(m).getUrl();
-      openNext_(m);
-      save_(m); sendPdf_(m);
-    } else save_(m);
+    if (!finish_(m)) save_(m);
+    return { ok: true };
+  }
+  if (b.action === 'absent') {   // the EcoOils Rep or EcoOils HSSE marks the other as not present, so the one who is present can sign alone
+    if (m.v !== 2 || m.status !== 'signing') return { ok: false, error: 'not available' };
+    const by = b.c, who = b.who;
+    if (!(CTL.indexOf(by) >= 0 && roleAuth_(m, b)) || CTL.indexOf(who) < 0 || who === by) return { ok: false, error: 'invalid sign-in' };
+    if (m.sign[who]) return { ok: false, error: 'already signed' };
+    m.absent = m.absent || {};
+    if (b.on) m.absent[who] = { by: by, at: Utilities.formatDate(new Date(), 'Asia/Jakarta', "yyyy-MM-dd HH:mm 'WIB'") }; else delete m.absent[who];
+    if (!finish_(m)) save_(m);
     return { ok: true };
   }
   if (b.action === 'resend') {
@@ -477,7 +519,7 @@ function pdfBlob_(m) {
   CODES.forEach(function (c) {
     const rows = (m.con[c] && m.con[c].rows) || []; if (!rows.length) return;
     rows.forEach(function (r, i) {
-      h += '<tr>' + (i === 0 ? '<td rowspan="' + rows.length + '"><b>' + NAMES[c] + '</b></td>' : '') +
+      h += '<tr>' + (i === 0 ? '<td rowspan="' + rows.length + '"><b>' + NAMES[c] + '</b>' + (m.con[c].name ? '<br><span style="font-size:9px">updated by ' + esc_(m.con[c].name) + '</span>' : '') + '</td>' : '') +
         '<td>' + esc_(r.area) + '</td><td>' + esc_(r.activity) + (r.details ? '<br><i>' + esc_(r.details) + '</i>' : '') + '</td><td>' + esc_(r.constraint) + '</td></tr>';
     });
   });
@@ -492,8 +534,9 @@ function pdfBlob_(m) {
   h += '<p><b>Host comments:</b> ' + esc_(m.hostc) + '</p>';
   h += '<h3 style="margin-bottom:3px">4. Sign-off</h3><p style="font-size:9px;color:#555">Each signatory confirmed that they represent the company shown, attended the meeting, and that this record is accurate and agreed. Each signature was verified by a one-time code sent to the signatory\'s registered email and sealed to the content hash below.</p>';
   h += '<table ' + T + '><tr style="background:#eee"><th>Company / role</th><th>Name and position</th><th>Signature</th><th>Verification</th></tr>';
-  required_(m).forEach(function (k) {
-    const s = m.sign[k];
+  (m.v === 2 ? ['ack', 'noted'] : required_(m)).forEach(function (k) {
+    const s = m.sign[k], ab = m.absent && m.absent[k];
+    if (ab) { h += '<tr><td><b>' + esc_(NAMES[k]) + '</b></td><td colspan="3"><i>Not present at the meeting</i> (marked by ' + esc_(NAMES[ab.by]) + ', ' + esc_(ab.at) + ')</td></tr>'; return; }
     h += '<tr><td><b>' + esc_(NAMES[k]) + '</b></td><td>' + (s ? esc_(s.name) + '<br><i>' + esc_(s.pos || '') + '</i>' : '') + '</td><td>' + (s ? '<img src="' + s.sign + '" height="40">' : '') + '</td><td style="font-size:9px">' +
       (s ? '<b style="color:#1b7f3b">DIGITALLY SIGNED</b><br>' + esc_(s.at) + '<br>' + esc_(s.method) + '<br>' + esc_(mask_(s.emailFull)) + '<br>Ref ' + esc_(String(s.sh).slice(0, 12)) : '') + '</td></tr>';
   });
@@ -502,9 +545,13 @@ function pdfBlob_(m) {
   h += '</body></html>';
   return Utilities.newBlob(h, 'text/html', 'SIMOPS.html').getAs('application/pdf').setName('SIMOPS_Meeting_Record_' + m.date + '.pdf');
 }
-function makePdf_(m) { return folder_().createFile(pdfBlob_(m)); }
+function makePdf_(m) {
+  const f = folder_().createFile(pdfBlob_(m));
+  try { f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) { /* sharing may be restricted by the account; the email attachment still works */ }
+  return f;
+}
 function sendPdf_(m) {
-  const list = [m.hostEmails, m.ackEmail, m.notedEmail];
+  const list = [m.hostEmails, m.ackEmail, m.notedEmail, roleEmails_().ack, roleEmails_().noted];
   m.parts.forEach(function (c) { if (m.con[c] && m.con[c].email) list.push(m.con[c].email); });
   const to = list.join(',').split(/[,;\s]+/).filter(okEmail_).filter(function (x, i, a) { return a.indexOf(x) === i; }).join(',');
   if (!to) return;
