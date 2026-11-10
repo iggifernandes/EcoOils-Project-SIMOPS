@@ -1,4 +1,4 @@
-// VERSION: 5.8.0 - cleaner signed PDF with EcoOils Project logo (bigger meeting photo, sign-off wording by method); My meetings list returns the PDF link
+// VERSION: 5.8.1 - cleaner signed PDF with EcoOils Project logo (bigger meeting photo, sign-off wording by method); My meetings list returns the PDF link
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > Project Settings > Script properties > add HOST_EMAILS = the HSSE host email(s) >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
