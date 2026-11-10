@@ -1,4 +1,4 @@
-// VERSION: 5.5.0 - EcoOils Project / EcoOils Operations companies; EcoOils Rep and HSSE sign with one code (no email)
+// VERSION: 5.6.0 - Admin can see and reset the EcoOils Rep / HSSE sign-off codes
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > Project Settings > Script properties > add HOST_EMAILS = the HSSE host email(s) >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -338,7 +338,7 @@ function handle_(b) {
   if (b.action === 'regGet') {
     if (!sess_(b.session)) return { ok: false, error: 'session' };
     const em = roleEmails_(), reg = {};
-    ROLES.forEach(function (r) { reg[r] = { email: em[r] || '', pinSet: !!props_().getProperty('pin:' + r) }; });
+    ROLES.forEach(function (r) { reg[r] = { email: em[r] || '', pinSet: !!props_().getProperty('pin:' + r), code: CTL.indexOf(r) >= 0 ? (props_().getProperty('pinplain:' + r) || '') : '' }; });
     return { ok: true, reg: reg };
   }
   if (b.action === 'regSet') {
@@ -360,6 +360,7 @@ function handle_(b) {
     if (b.pin) {
       if (!/^\d{4,8}$/.test(String(b.pin))) return { ok: false, error: 'PIN must be 4 to 8 digits' };
       props_().setProperty('pin:' + b.role, pinHash_(b.role, String(b.pin)));
+      props_().setProperty('pinplain:' + b.role, String(b.pin));   // kept in Script properties (owner-only, never in the sheet or code) so the Admin can look the code up again
       CacheService.getScriptCache().remove('lock:' + b.role);
     }
     return { ok: true };
@@ -367,7 +368,7 @@ function handle_(b) {
   if (b.action === 'pinReset') {
     if (!sess_(b.session)) return { ok: false, error: 'session' };
     if (ROLES.indexOf(b.role) < 0) return { ok: false, error: 'unknown party' };
-    props_().deleteProperty('pin:' + b.role);
+    props_().deleteProperty('pin:' + b.role); props_().deleteProperty('pinplain:' + b.role);
     const em = roleEmails_(); delete em[b.role]; props_().setProperty('roleEmails', JSON.stringify(em));
     CacheService.getScriptCache().remove('lock:' + b.role);
     return { ok: true };
