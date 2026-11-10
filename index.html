@@ -95,7 +95,7 @@ canvas.pad{width:100%;height:clamp(90px,18vh,170px);border:1px dashed var(--grey
 <div id="peek"><img alt=""></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
-const VERSION='5.14.0';document.getElementById('verlbl').textContent='v'+VERSION;
+const VERSION='5.14.1';document.getElementById('verlbl').textContent='v'+VERSION;
 const API_URL='https://script.google.com/macros/s/AKfycbz9C-pbRRJ0Rf1EseelBe1IGp0FkydwoIZ0e1xoBgC_Wkxl7C7dkOhFh3c9v2EczQCMCA/exec';
 const CODES=['KKS','WEN','GSB','PBS','ECO','EOO','OT1','OT2'];
 const ROLES=[...CODES,'ack','noted'];
@@ -166,7 +166,8 @@ const ctlName=r=>t('role_'+r);
 const stepper=()=>`<div class="steps">${STAT.map((s,i)=>`<div class="${i===sIdx()?'on':i<sIdx()?'past':''}">${t('s_'+s)}</div>`).join('')}</div>`;
 const infoCard=()=>`<div class="card"><div class="grid"><div><label>${t('host')}</label>${esc(M.host)}</div><div><label>${t('date')}</label>${esc(M.date)}</div><div><label>${t('time')}</label>${esc(M.time)}</div></div><button class="btn sec" onclick="load()">${t('refresh')}</button><button class="btn" onclick="showReadout()">${t('readout')}</button>${M.H?`<a class="btn sec" href="${BASE}?v=${M.id}">${t('verify')}</a>`:''}</div>`;
 function sigLine(k){const s=M.sign&&M.sign[k];return s?`<div class="stamp"><div class="sg"><img src="${s.sign}"></div><div class="st">✔ ${t('stampT')}</div><div><b>${esc(s.name)}</b>${s.pos?` · ${esc(s.pos)}`:''}</div>${s.as?`<div><b>${esc(RN(s.as))} Rep</b></div>`:''}<div class="mut">${esc(s.at)} · ${esc(s.method)} · ${esc(s.email)}</div><div class="ref">${t('ref')} ${esc(String(s.sh||'').slice(0,12))}</div></div>`:(M.status==='signing'&&REQ().includes(k)?`<div class="mut" style="margin-top:8px">${t('needsign')}</div>`:'')}
-function canEditCons(){return M.v===2&&(M.status==='open'||M.status==='discussion')&&(role==='host'||(CTL.includes(CC)&&role==='con'))}
+let ECTX=null;
+function canEditCons(){if(ECTX)return M.v===2&&(M.status==='open'||M.status==='discussion');return M.v===2&&(M.status==='open'||M.status==='discussion')&&(role==='host'||(CTL.includes(CC)&&role==='con'))}
 function consOpt(cur){const k=!!cur&&!CONS.includes(cur);return `<select class="ek"><option value="">${t('constraint')}…</option>${CONS.map(c=>`<option value="${esc(c)}" ${!k&&cur===c?'selected':''}>${esc(c)}</option>`).join('')}<option value="__other" ${k?'selected':''}>${t('other')}</option></select><input class="eo" placeholder="${t('constraint')}" value="${k?esc(cur):''}" style="margin-top:4px;${k?'':'display:none'}">`}
 function overview(ed){
   ed=!!ed&&canEditCons();
@@ -176,19 +177,20 @@ function overview(ed){
     h+=`<div class="card" data-oc="${c}"><h2 style="border-left:6px solid ${COLORS[c]};padding-left:8px">${RN(c)}${rows.length?`<span class="tag ok">${t('entered')}</span>`:''}</h2>${rows.length&&M.con[c].name?`<div class="mut" style="margin:-4px 0 6px">${t('updby')} ${esc(M.con[c].name)}</div>`:''}`+(rows.length?`<table><tr><th>${t('area')}</th><th>${t('activity')}</th><th>${t('constraint')} / ${t('ctrl')}</th>${ed?'<th></th>':''}</tr>`+rows.map((r,i)=>`<tr class="${bad.has(c+'#'+i)?'bad':''}" data-r="${c}:${i}"><td>${esc(r.area)}</td><td>${esc(r.activity)}${r.details?`<div class="mut">${esc(r.details)}</div>`:''}</td><td class="cc">${esc(r.constraint)}${r.controls?`<div style="margin-top:4px"><b>${t('ctrl')}:</b> ${esc(r.controls).replace(/\n/g,'<br>')}</div>`:''}${r.ed?`<div class="mut">${t('edby')} ${esc(r.ed)}</div>`:''}</td>${ed?`<td><button type="button" class="btn sec" data-ec="${c}:${i}" title="${t('edit')}">✎</button></td>`:''}</tr>`).join('')+'</table>':`<div class="mut">${t('none')}</div>`)+(ed?`<div class="addbox" data-c="${c}"><button type="button" class="btn sec" data-addc="${c}" style="margin-top:8px">${t('addcons')}</button></div>`:'')+sigLine(c)+'</div>'});
   return h;
 }
-function consSave(payload,btn){return busy(btn,async()=>{const r=await post({action:'consEdit',id:MID,...(HT?{ht:HT}:AUTH()),...payload});
-  if(!r.ok)return toast(r.error||t('err'));dirty=false;toast(t('saved'));applyR(r)})}
+function consSave(payload,btn){return busy(btn,async()=>{const r=await post({action:'consEdit',id:ECTX?ECTX.id:MID,...(ECTX?ECTX.auth:(HT?{ht:HT}:AUTH())),...payload});
+  if(!r.ok)return toast(r.error||t('err'));dirty=false;toast(t('saved'));if(ECTX)ECTX.after();else applyR(r)})}
 function bindCons(){
   const wire=d=>{const s=d.querySelector('.ek'),o=d.querySelector('.eo');s.onchange=()=>{o.style.display=s.value==='__other'?'':'none'}};
   const val=d=>{const s=d.querySelector('.ek');return s.value==='__other'?d.querySelector('.eo').value.trim():s.value};
-  const rerender=()=>applyR({ok:true,meeting:M,role});
-  document.querySelectorAll('[data-ec]').forEach(b=>b.onclick=()=>{const [c,i]=b.dataset.ec.split(':'),r=M.con[c].rows[+i],tr0=b.closest('tr');b.style.display='none';
+  const rerender=()=>{if(ECTX)ECTX.after();else applyR({ok:true,meeting:M,role})};
+  const withM=f=>{if(!ECTX)return f();const p=M;M=ECTX.m;try{return f()}finally{M=p}};
+  document.querySelectorAll('[data-ec]').forEach(b=>b.onclick=()=>{const [c,i]=b.dataset.ec.split(':'),r=withM(()=>M.con[c].rows[+i]),tr0=b.closest('tr');b.style.display='none';
     tr0.insertAdjacentHTML('afterend','<tr class="er-edit" data-for="'+b.dataset.ec+'"><td colspan="4" class="ec2"></td></tr>');const td=tr0.nextElementSibling.querySelector('.ec2');
     td.innerHTML=`<div class="ed">${consOpt(r.constraint||'')}<label style="margin-top:6px">${t('ctrl')}</label><textarea class="ectl" rows="3" placeholder="${t('ctrlph')}">${esc(r.controls||'')}</textarea><div style="display:flex;gap:6px;margin-top:6px"><button type="button" class="btn" data-sv>${t('save')}</button><button type="button" class="btn sec" data-cx>${t('cancel')}</button></div></div>`;
     const d=td.querySelector('.ed');wire(d);d.querySelector('[data-cx]').onclick=rerender;
     d.querySelector('[data-sv]').onclick=e=>consSave({edits:[{c,i:+i,constraint:val(d),controls:d.querySelector('.ectl').value.trim()}]},e.target)});
   document.querySelectorAll('[data-addc]').forEach(b=>b.onclick=()=>{const c=b.dataset.addc,box=b.parentElement;b.style.display='none';
-    box.insertAdjacentHTML('beforeend',`<div class="ed" style="margin-top:8px;padding:8px;border:1px dashed #bbb;border-radius:8px"><select class="ea"><option value="">${t('area')}…</option>${areaList().map(a=>`<option value="${esc(a)}">${esc(a)}</option>`).join('')}</select><input class="eb" placeholder="${t('activity')}" style="margin-top:4px"><div style="margin-top:4px">${consOpt('')}</div><label style="margin-top:6px">${t('ctrl')}</label><textarea class="ectl" rows="3" placeholder="${t('ctrlph')}"></textarea><div style="display:flex;gap:6px;margin-top:6px"><button type="button" class="btn" data-sv>${t('save')}</button><button type="button" class="btn sec" data-cx>${t('cancel')}</button></div></div>`);
+    box.insertAdjacentHTML('beforeend',`<div class="ed" style="margin-top:8px;padding:8px;border:1px dashed #bbb;border-radius:8px"><select class="ea"><option value="">${t('area')}…</option>${withM(()=>areaList()).map(a=>`<option value="${esc(a)}">${esc(a)}</option>`).join('')}</select><input class="eb" placeholder="${t('activity')}" style="margin-top:4px"><div style="margin-top:4px">${consOpt('')}</div><label style="margin-top:6px">${t('ctrl')}</label><textarea class="ectl" rows="3" placeholder="${t('ctrlph')}"></textarea><div style="display:flex;gap:6px;margin-top:6px"><button type="button" class="btn" data-sv>${t('save')}</button><button type="button" class="btn sec" data-cx>${t('cancel')}</button></div></div>`);
     const d=box.querySelector('.ed');wire(d);d.querySelector('[data-cx]').onclick=rerender;
     d.querySelector('[data-sv]').onclick=e=>{const a={c,area:d.querySelector('.ea').value,activity:d.querySelector('.eb').value.trim(),constraint:val(d),controls:d.querySelector('.ectl').value.trim()};
       if(!a.activity||!(a.constraint||a.controls))return toast(t('needcons'));consSave({adds:[a]},e.target)}});
@@ -337,15 +339,17 @@ let LIVET=null;
 async function liveHome(kind){   // Admin, EcoOils Rep and EcoOils HSSE see today's whole SIMOPS (every company's entries, attendance, photos, sign-off) right on their home page
   clearInterval(LIVET);const box=$('#live');if(!box||!kind)return;
   const cr=ls('simopsCR'),sess=localStorage.simopsSess;let hts=null;
-  const draw=async()=>{const bx=$('#live');if(!bx){clearInterval(LIVET);return}
+  const draw=async(force)=>{const bx=$('#live');if(!bx){clearInterval(LIVET);return}
+    if(!force&&bx.querySelector('.ed'))return;   // never redraw while someone is typing in an editor
     try{const r=await get({action:'current',full:1,c:kind==='ctl'?cr:''});
       if(!r.ok||!r.meeting){bx.innerHTML=`<div class="card"><h2>${t('livet')}</h2><div class="mut">${t('nocur')}</div></div>`;return}
       let link=`${BASE}?m=${r.id}`;
       if(kind==='host'){if(!hts){const mm=await post({action:'mine',session:sess});hts={};(mm.items||[]).forEach(x=>hts[x.id]=x.ht)}if(hts[r.id])link+=`&ht=${hts[r.id]}`}
       else link+=`&c=${cr}`;
       const prev=M;M=r.meeting;
-      const html=`<div class="card"><h2>${t('livet')}</h2>${stepper()}<div class="grid"><div><label>${t('host')}</label>${esc(M.host)}</div><div><label>${t('date')}</label>${esc(M.date)}</div><div><label>${t('time')}</label>${esc(M.time)}</div></div><a class="btn" href="${link}">${t('open')}</a><button class="btn sec" id="lvr">${t('refresh')}</button></div>`+overview()+attRead()+photosCard(false)+hcRead()+sigCards();
-      M=prev;bx.innerHTML=html;bindPhotos();const rb=$('#lvr');if(rb)rb.onclick=draw;
+      const canEd=kind==='ctl'||!!hts[r.id];ECTX=canEd?{id:r.id,m:r.meeting,after:()=>draw(true),auth:kind==='host'?{ht:hts[r.id]}:{c:cr,s:CS()}}:null;
+      const html=`<div class="card"><h2>${t('livet')}</h2>${stepper()}<div class="grid"><div><label>${t('host')}</label>${esc(M.host)}</div><div><label>${t('date')}</label>${esc(M.date)}</div><div><label>${t('time')}</label>${esc(M.time)}</div></div><a class="btn" href="${link}">${t('open')}</a><button class="btn sec" id="lvr">${t('refresh')}</button></div>`+overview(true)+attRead()+photosCard(false)+hcRead()+sigCards();
+      M=prev;bx.innerHTML=html;bindPhotos();bindCons();const rb=$('#lvr');if(rb)rb.onclick=draw;
     }catch(e){}};
   await draw();LIVET=setInterval(()=>{if(!document.hidden)draw()},30000);
 }
@@ -426,6 +430,7 @@ async function home(){
 
 /* ---------- HOST ---------- */
 function hostView(){
+  ECTX=null;
   const done=M.status==='done',lockd=M.status==='signing'||done,tok=M.tok||{};
   const dis=lockd?'disabled':'';
   let h=stepper()+infoCard();
@@ -524,6 +529,7 @@ async function regFix(els,bx){const prev=els.map(e=>e.value);let ch=0;bx.innerHT
   dirty=true;bx.innerHTML=`<div class="okb">${t('regdone')} <button type="button" class="btn sec ru">${t('regundo')}</button></div>`;
   bx.querySelector('.ru').onclick=()=>{els.forEach((e,i)=>e.value=prev[i]);bx.innerHTML=''}}
 function partyView(){
+  ECTX=null;
   const isCon=CODES.includes(CC),e=(M.con&&M.con[CC])||{},open=M.status==='open';
   const dr=(isCon&&open)?loadDraft():null;
   const rows=(dr&&dr.rows&&dr.rows.length)?dr.rows:((e.rows&&e.rows.length)?e.rows:[{area:'',activity:'',constraint:''}]);
