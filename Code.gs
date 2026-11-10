@@ -1,4 +1,4 @@
-// VERSION: 5.3.1 - host emails now live in Script property HOST_EMAILS (no more overwrite on paste)
+// VERSION: 5.3.2 - GET parameter cc (company) fixes endless loading
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > Project Settings > Script properties > add HOST_EMAILS = the HSSE host email(s) >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -208,6 +208,7 @@ function verify_(id) {
 
 function doGet(e) {
   const p = (e && e.parameter) || {};
+  if (p.cc && !p.c) p.c = p.cc;   // the app sends the company as "cc" (a GET parameter named "c" is dropped by the gateway)
   if (p.action === 'get') {
     const m = load_(p.id);
     if (!m) return out_({ ok: false, error: 'not found' });
