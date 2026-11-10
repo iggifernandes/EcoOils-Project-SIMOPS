@@ -1,4 +1,4 @@
-// VERSION: 5.3.2 - GET parameter cc (company) fixes endless loading
+// VERSION: 5.4.0 - correct dates/times in lists; Admin can delete meetings
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > Project Settings > Script properties > add HOST_EMAILS = the HSSE host email(s) >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -14,6 +14,10 @@ const CODES = ['KKS', 'WEN', 'GSB', 'PBS', 'ECO', 'OT1', 'OT2'];
 const ROLES = ['KKS', 'WEN', 'GSB', 'PBS', 'ECO', 'OT1', 'OT2', 'ack', 'noted'];
 const NAMES = { KKS: 'KKS', WEN: 'WEN', GSB: 'GSB', PBS: 'PBS', ECO: 'EcoOils', OT1: 'Other contractor 1', OT2: 'Other contractor 2', ack: 'Acknowledged (EcoOils Construction Representative)', noted: 'Noted (EcoOils HSSE)' };
 
+// Sheet cells come back as Date objects (date shifted by the time zone, time as 1899): normalise to plain text in the sheet's own time zone
+function tz_() { try { return SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone() || 'Asia/Jakarta'; } catch (e) { return 'Asia/Jakarta'; } }
+function fd_(v) { return v instanceof Date ? Utilities.formatDate(v, tz_(), 'yyyy-MM-dd') : String(v || '').slice(0, 10); }
+function ft_(v) { return v instanceof Date ? Utilities.formatDate(v, tz_(), 'HH:mm') : String(v || '').slice(0, 5); }
 function out_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
 function folder_() { const it = DriveApp.getFoldersByName(FOLDER_NAME); return it.hasNext() ? it.next() : DriveApp.createFolder(FOLDER_NAME); }
 function sheet_() {
@@ -219,16 +223,16 @@ function doGet(e) {
     const sh = sheet_(), last = sh.getLastRow();
     const rows = last > 1 ? sh.getRange(2, 1, last - 1, 5).getValues() : [];
     let best = null;
-    rows.forEach(function (r) { if (r[4] !== 'done' && (!best || String(r[1]) >= String(best[1]))) best = r; });
+    rows.forEach(function (r) { if (r[4] !== 'done' && (!best || (fd_(r[1]) + ' ' + ft_(r[2])) >= (fd_(best[1]) + ' ' + ft_(best[2])))) best = r; });
     if (!best) return out_({ ok: true, id: '' });
-    const res = { ok: true, id: best[0], date: best[1], time: best[2], status: best[4] };
+    const res = { ok: true, id: best[0], date: fd_(best[1]), time: ft_(best[2]), status: best[4] };
     if (p.full) { const mm = load_(best[0]); if (mm) { const v = view_(mm, { id: best[0], c: p.c || '' }); if (v && v.ok) { res.role = v.role; res.meeting = v.meeting; } } }   // one round trip: id + meeting
     return out_(res);
   }
   if (p.action === 'list') {
     const sh = sheet_(), last = sh.getLastRow();
     const rows = last > 1 ? sh.getRange(2, 1, last - 1, 7).getValues() : [];
-    const items = rows.filter(function (r) { return r[4] !== 'open'; }).reverse().slice(0, 60).map(function (r) { return { id: r[0], date: r[1], time: r[2], host: r[3], status: r[4], parties: r[5], clashes: r[6] }; });
+    const items = rows.filter(function (r) { return r[4] !== 'open'; }).reverse().slice(0, 60).map(function (r) { return { id: r[0], date: fd_(r[1]), time: ft_(r[2]), host: r[3], status: r[4], parties: r[5], clashes: r[6] }; });
     return out_({ ok: true, items: items });
   }
   return out_({ ok: true, version: '4.9.0' });
@@ -325,7 +329,7 @@ function handle_(b) {
     if (!role) return { ok: false, error: 'session' };
     const sh = sheet_(), last = sh.getLastRow();
     const rows = last > 1 ? sh.getRange(2, 1, last - 1, 5).getValues().reverse() : [];
-    const mk = function (r) { return { id: r[0], date: r[1], time: r[2], status: r[4] }; };
+    const mk = function (r) { return { id: r[0], date: fd_(r[1]), time: ft_(r[2]), status: r[4] }; };
     const items = rows.filter(function (r) { return r[4] !== 'done'; }).slice(0, 20).map(mk)
       .concat(rows.filter(function (r) { return r[4] === 'done'; }).slice(0, 5).map(mk));
     return { ok: true, role: role, items: items };
@@ -369,6 +373,19 @@ function handle_(b) {
     return { ok: true };
   }
 
+  if (b.action === 'delete') {   // Admin removes a meeting: record and PDF go to the Drive bin, the register row is removed
+    if (!sess_(b.session)) return { ok: false, error: 'session' };
+    const dm = load_(b.id);
+    if (!dm) return { ok: false, error: 'not found' };
+    try { file_(b.id).setTrashed(true); } catch (e) {}
+    try { if (dm.pdfId) DriveApp.getFileById(dm.pdfId).setTrashed(true); } catch (e) {}
+    CacheService.getScriptCache().remove('fid:' + b.id);
+    const dsh = sheet_(), dl = dsh.getLastRow();
+    const dids = dl > 1 ? dsh.getRange(2, 1, dl - 1, 1).getValues().map(function (r) { return r[0]; }) : [];
+    const di = dids.indexOf(b.id);
+    if (di >= 0) dsh.deleteRow(di + 2);
+    return { ok: true };
+  }
   if (b.action === 'create') {
     const owner = sess_(b.session);
     if (!owner) return { ok: false, error: 'session' };
@@ -380,7 +397,7 @@ function handle_(b) {
     if (!owner) return { ok: false, error: 'session' };
     const sh = sheet_(), last = sh.getLastRow();
     const rows = last > 1 ? sh.getRange(2, 1, last - 1, 11).getValues() : [];
-    return { ok: true, items: rows.filter(function (r) { return r[9] === owner; }).reverse().slice(0, 40).map(function (r) { return { id: r[0], date: r[1], time: r[2], status: r[4], ht: r[10] }; }) };
+    return { ok: true, items: rows.filter(function (r) { return r[9] === owner; }).reverse().slice(0, 40).map(function (r) { return { id: r[0], date: fd_(r[1]), time: ft_(r[2]), status: r[4], ht: r[10] }; }) };
   }
 
   const m = load_(b.id);
