@@ -95,7 +95,7 @@ canvas.pad{width:100%;height:clamp(90px,18vh,170px);border:1px dashed var(--grey
 <div id="peek"><img alt=""></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
-const VERSION='5.3.0';
+const VERSION='5.3.1';
 const API_URL='https://script.google.com/macros/s/AKfycbz9C-pbRRJ0Rf1EseelBe1IGp0FkydwoIZ0e1xoBgC_Wkxl7C7dkOhFh3c9v2EczQCMCA/exec';
 const CODES=['KKS','WEN','GSB','PBS','ECO','OT1','OT2'];
 const ROLES=[...CODES,'ack','noted'];
@@ -125,7 +125,7 @@ const AUTH=()=>TK?{c:CC,t:TK}:{c:CC,s:CS()};
 function csClear(){try{localStorage.removeItem('simopsCS');localStorage.removeItem('simopsCR')}catch(e){}}
 const BASE=location.origin+location.pathname;
 const RN=c=>c==='ack'?t('ackS'):c==='noted'?t('notedS'):NAME[c];
-let M=null,role=null,dirty=false;
+let CUR=null,M=null,role=null,dirty=false;
 
 async function post(b){const r=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(b)});return r.json()}
 async function get(p){const r=await fetch(API_URL+'?'+new URLSearchParams(p));return r.json()}
@@ -338,9 +338,11 @@ async function home(){
     post({action:'myMeetings',s:cs}).then(r=>{const b=$('#mym');if(!r.ok){csClear();return home()}
       b.innerHTML=r.items.length?r.items.map(x=>`<div class="lk"><a class="btn sec mtg" href="${BASE}?m=${x.id}">${esc(String(x.date).slice(0,10))} ${esc(x.time||'')} <span class="tag ${x.status==='done'?'ok':''}">${t('s_'+x.status)}</span></a></div>`).join(''):t('nomtg')});
   }else{
-    const openCo=async c=>{try{localStorage.simopsCR=c}catch(e){}const r=await get({action:'current'});if(!r.ok||!r.id)return msg(t('nocur'));location.href=`${BASE}?m=${r.id}&c=${c}`};
+    const openCo=async c=>{try{localStorage.simopsCR=c}catch(e){}const r=await(CUR&&CUR.c===c?CUR.p:get({action:'current',full:1,c}));if(!r.ok||!r.id)return msg(t('nocur'));try{if(r.meeting&&r.role!=='host')localStorage.setItem('simopsM:'+r.id+':'+c,JSON.stringify({meeting:r.meeting,role:r.role}));localStorage.simopsLast=r.id}catch(e){}location.href=`${BASE}?m=${r.id}&c=${c}`};
+    const pre=c=>{if(CODES.includes(c))CUR={c,p:get({action:'current',full:1,c}).catch(()=>({ok:false}))}};
+    pre($('#oc_role').value);$('#oc_role').onchange=()=>pre($('#oc_role').value);
     $('#oc_go').onclick=()=>openCo($('#oc_role').value);
-    if(CODES.includes(ls('simopsCR'))&&!sess&&!sessionStorage.simopsStay){sessionStorage.simopsStay='1';openCo(ls('simopsCR'))}   // remembered company: go straight to today's meeting
+    if(CODES.includes(ls('simopsCR'))&&!sess&&!sessionStorage.simopsStay){sessionStorage.simopsStay='1';const lm=ls('simopsLast');if(lm&&ls('simopsM:'+lm+':'+ls('simopsCR')))location.href=`${BASE}?m=${lm}&c=${ls('simopsCR')}`;else openCo(ls('simopsCR'))}   // remembered company: go straight to today's meeting
     $('#p_go').onclick=async()=>{const r=await post({action:'roleLogin',role:$('#p_role').value,pin:$('#p_pin').value});if(!r.ok)return msg(r.error||t('err'));
       try{localStorage.simopsCS=r.session;localStorage.simopsCR=r.role}catch(e){}home()};
     $('#p_send').onclick=async()=>{const r=await post({action:'pinOtp',role:$('#p_role').value,email:$('#p_em').value});if(!r.ok)return msg(r.error||t('err'));
@@ -567,6 +569,7 @@ async function load(){
   else r=await get({action:'get',id:MID,ht:HT||'',c:CC||'',t:TK||''});
   if(!r.ok){$('#app').innerHTML=`<div class="card badb">${t('bad')}</div>`;return}
   M=r.meeting;role=r.role;
+  if(M.status==='done'&&CC&&!TK&&!HT&&!sessionStorage.simopsChk){sessionStorage.simopsChk='1';const cu=await get({action:'current'});if(cu.ok&&cu.id&&cu.id!==MID){location.href=`${BASE}?m=${cu.id}&c=${CC}`;return}}
   if(r.role!=='host'){try{localStorage.setItem(ck,JSON.stringify({meeting:r.meeting,role:r.role}))}catch(e){}}
   if(role==='host')hostView();else if(role==='con')partyView();else publicView();
   dirty=false;

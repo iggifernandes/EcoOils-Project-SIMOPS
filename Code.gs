@@ -1,4 +1,4 @@
-// VERSION: 5.2.0 - SIMOPS Meeting Record backend (single sign-in with per-party PIN set by email code, public record, email-OTP signatures, tamper-evident seal, map)
+// VERSION: 5.2.1 - faster open: current returns the meeting in one call
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > put the HSSE host email(s) in HOST_EMAILS below >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -215,7 +215,10 @@ function doGet(e) {
     const rows = last > 1 ? sh.getRange(2, 1, last - 1, 5).getValues() : [];
     let best = null;
     rows.forEach(function (r) { if (r[4] !== 'done' && (!best || String(r[1]) >= String(best[1]))) best = r; });
-    return out_(best ? { ok: true, id: best[0], date: best[1], time: best[2], status: best[4] } : { ok: true, id: '' });
+    if (!best) return out_({ ok: true, id: '' });
+    const res = { ok: true, id: best[0], date: best[1], time: best[2], status: best[4] };
+    if (p.full) { const mm = load_(best[0]); if (mm) { const v = view_(mm, { id: best[0], c: p.c || '' }); if (v && v.ok) { res.role = v.role; res.meeting = v.meeting; } } }   // one round trip: id + meeting
+    return out_(res);
   }
   if (p.action === 'list') {
     const sh = sheet_(), last = sh.getLastRow();
