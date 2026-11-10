@@ -1,4 +1,4 @@
-// VERSION: 5.1.0 - SIMOPS Meeting Record backend (single sign-in with per-party PIN set by email code, public record, email-OTP signatures, tamper-evident seal, map)
+// VERSION: 5.2.0 - SIMOPS Meeting Record backend (single sign-in with per-party PIN set by email code, public record, email-OTP signatures, tamper-evident seal, map)
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > put the HSSE host email(s) in HOST_EMAILS below >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -101,7 +101,7 @@ function finish_(m) {   // complete the record as soon as everybody who is prese
   m.seal = sealOf_(m);
   m.sealedAt = new Date().toISOString();
   m.status = 'done';
-  m.pdf = makePdf_(m).getUrl();
+  const pf = makePdf_(m); m.pdf = pf.getUrl(); m.pdfId = pf.getId();
   openNext_(m);
   save_(m); sendPdf_(m);
   return true;
@@ -366,6 +366,12 @@ function handle_(b) {
   if (!m) return { ok: false, error: 'not found' };
   const isHost = !!(b.ht && b.ht === m.ht);
   if (b.action === 'get') return view_(m, b);
+  if (b.action === 'pdfData') {   // the signed PDF as data, so the phone can attach it straight into WhatsApp (the record is public anyway)
+    if (m.status !== 'done') return { ok: false, error: 'not signed yet' };
+    let blob;
+    try { blob = m.pdfId ? DriveApp.getFileById(m.pdfId).getBlob() : pdfBlob_(m); } catch (err) { blob = pdfBlob_(m); }
+    return { ok: true, name: 'SIMOPS_Meeting_Record_' + String(m.date).slice(0, 10) + '.pdf', data: Utilities.base64Encode(blob.getBytes()) };
+  }
   // ----- AI wording check (free Gemini tier; key lives in Script Properties as GEMINI_API_KEY, never in code) -----
   if (b.action === 'polish') {
     if (!(isHost || roleAuth_(m, b) || (m.v === 2 && CODES.indexOf(b.c) >= 0))) return { ok: false, error: 'choose your company first' };
