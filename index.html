@@ -95,7 +95,7 @@ canvas.pad{width:100%;height:clamp(90px,18vh,170px);border:1px dashed var(--grey
 <div id="peek"><img alt=""></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
-const VERSION='5.15.1';document.getElementById('verlbl').textContent='v'+VERSION;
+const VERSION='5.15.2';document.getElementById('verlbl').textContent='v'+VERSION;
 const API_URL='https://script.google.com/macros/s/AKfycbz9C-pbRRJ0Rf1EseelBe1IGp0FkydwoIZ0e1xoBgC_Wkxl7C7dkOhFh3c9v2EczQCMCA/exec';
 const CODES=['KKS','WEN','GSB','PBS','ECO','EOO','OT1','OT2'];
 const ROLES=[...CODES,'ack','noted'];
@@ -625,7 +625,12 @@ async function load_(){
   if(!M){try{const c=JSON.parse(localStorage.getItem(ck)||'null');if(c&&c.meeting&&c.role!=='host'){M=c.meeting;role=c.role;if(role==='con')partyView();else publicView();}}catch(e){}}   // show the last seen version instantly while the fresh one loads
   if(!HT&&!TK&&CC&&CS()){r=await post({action:'get',id:MID,c:CC,s:CS()});if(!r.ok||r.role!=='con'){csClear();r=await get({action:'get',id:MID})}}
   else r=await get({action:'get',id:MID,ht:HT||'',c:CC||'',t:TK||''});
-  if(!r.ok){$('#app').innerHTML=`<div class="card badb">${t('bad')}</div>`;return}
+  if(!r.ok){
+    if(r.error==='not found'&&!HT&&!TK){   // a remembered meeting that was deleted or replaced: forget it and open today's meeting instead
+      try{localStorage.removeItem(ck);if(ls('simopsLast')===MID)localStorage.removeItem('simopsLast')}catch(e){}
+      try{const cu=await get({action:'current'});if(cu.ok&&cu.id&&cu.id!==MID){location.replace(`${BASE}?m=${cu.id}${CC?'&c='+CC:''}`);return}}catch(e){}
+      $('#app').innerHTML=`<div class="card"><div class="mut">${t('nocur')}</div><a class="btn" href="${BASE}?home=1" style="margin-top:8px">${t('homel')}</a></div>`;return}
+    $('#app').innerHTML=`<div class="card badb">${t('bad')}</div><a class="btn sec" href="${BASE}?home=1" style="margin-top:8px">${t('homel')}</a>`;return}
   M=r.meeting;role=r.role;
   if(M.status==='done'&&CC&&!TK&&!HT&&!sessionStorage.simopsChk){sessionStorage.simopsChk='1';const cu=await get({action:'current'});if(cu.ok&&cu.id&&cu.id!==MID){location.href=`${BASE}?m=${cu.id}&c=${CC}`;return}}
   if(r.role!=='host'){try{localStorage.setItem(ck,JSON.stringify({meeting:r.meeting,role:r.role}))}catch(e){}}
