@@ -1,4 +1,4 @@
-// VERSION: 5.8.1 - cleaner signed PDF with EcoOils Project logo (bigger meeting photo, sign-off wording by method); My meetings list returns the PDF link
+// VERSION: 5.9.0 - EcoOils Rep chooses "EcoOils Project Rep" or "EcoOils Operations Rep" when signing (sealed and shown on the PDF); signed PDF with logo, photo on page 2
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > Project Settings > Script properties > add HOST_EMAILS = the HSSE host email(s) >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -95,7 +95,7 @@ function content_(m) {
   return out;
 }
 function contentHash_(m) { return sha_(JSON.stringify(content_(m))); }
-function sigHash_(who, s, H) { const parts = [who, s.name, s.emailFull, s.at, H, sha_(s.sign)]; if (s.pos) parts.push(s.pos); return sha_(parts.join('|')); }
+function sigHash_(who, s, H) { const parts = [who, s.name, s.emailFull, s.at, H, sha_(s.sign)]; if (s.pos) parts.push(s.pos); if (s.as) parts.push(s.as); return sha_(parts.join('|')); }
 function required_(m) {
   if (m.v !== 2) return m.parts.concat(['ack', 'noted']);
   return ['ack', 'noted'].filter(function (r) { return !(m.absent && m.absent[r]); });   // a role marked "not present" by the other does not sign
@@ -203,7 +203,7 @@ function verify_(id) {
   const Hnow = contentHash_(m);
   const sigs = Object.keys(m.sign).map(function (k) {
     const s = m.sign[k];
-    return { who: k, label: NAMES[k], name: s.name, pos: s.pos || '', email: maskList_(s.emailFull), at: s.at, method: s.method, ok: sigHash_(k, s, m.H) === s.sh };
+    return { who: k, label: NAMES[k], name: s.name, pos: s.pos || '', as: s.as || '', email: maskList_(s.emailFull), at: s.at, method: s.method, ok: sigHash_(k, s, m.H) === s.sh };
   });
   const contentOk = Hnow === m.H;
   let sealOk = null;
@@ -528,9 +528,12 @@ function handle_(b) {
     if (m.sign[w]) return { ok: false, error: 'already signed' };
     if (!b.name || !b.sign) return { ok: false, error: 'name and signature required' };
     if (!String(b.pos || '').trim()) return { ok: false, error: 'position required' };
+    const asRep = (m.v === 2 && w === 'ack') ? String(b.as || '') : '';
+    if (m.v === 2 && w === 'ack' && asRep !== 'ECO' && asRep !== 'EOO') return { ok: false, error: 'choose EcoOils Project Rep or EcoOils Operations Rep' };
     const byCode = m.v === 2 && CTL.indexOf(w) >= 0;   // signed in with the sign-off code set by the Admin: no email step
     if (!byCode && !otpCheck_('sign:' + m.id + ':' + w, b.code)) return { ok: false, error: 'wrong or expired code' };
     const s = { name: String(b.name).trim(), emailFull: byCode ? (emailOf_(m, w) || '') : emailOf_(m, w), at: Utilities.formatDate(new Date(), 'Asia/Jakarta', "yyyy-MM-dd HH:mm 'WIB'"), method: byCode ? 'Sign-off code' : 'Email one-time code', pos: String(b.pos).trim().slice(0, 60), sign: b.sign };
+    if (asRep) s.as = asRep;
     s.sh = sigHash_(w, s, m.H);
     m.sign[w] = s;
     if (!finish_(m)) save_(m);
@@ -593,7 +596,7 @@ function pdfHtml_(m) {
   (m.v === 2 ? ['ack', 'noted'] : required_(m)).forEach(function (k) {
     const s = m.sign[k], ab = m.absent && m.absent[k];
     if (ab) { h += '<tr><td ' + TD + '><b>' + esc_(NAMES[k]) + '</b></td><td ' + TD + ' colspan="3"><i>Not present at the meeting</i> (marked by ' + esc_(NAMES[ab.by]) + ', ' + esc_(ab.at) + ')</td></tr>'; return; }
-    h += '<tr><td ' + TD + '><b>' + esc_(NAMES[k]) + '</b></td><td ' + TD + '>' + (s ? '<b>' + esc_(s.name) + '</b><br><i>' + esc_(s.pos || '') + '</i>' : '') + '</td><td ' + TD + '>' + (s ? '<img src="' + s.sign + '" height="42">' : '') + '</td><td ' + TD + ' style="font-size:8.5px">' +
+    h += '<tr><td ' + TD + '><b>' + esc_(NAMES[k]) + '</b>' + (s && s.as ? '<br><span style="font-size:9px">' + esc_(NAMES[s.as]) + ' Rep</span>' : '') + '</td><td ' + TD + '>' + (s ? '<b>' + esc_(s.name) + '</b><br><i>' + esc_(s.pos || '') + '</i>' : '') + '</td><td ' + TD + '>' + (s ? '<img src="' + s.sign + '" height="42">' : '') + '</td><td ' + TD + ' style="font-size:8.5px">' +
       (s ? '<b style="color:' + G + '">DIGITALLY SIGNED</b><br>' + esc_(s.at) + '<br>' + esc_(s.method) + (s.emailFull ? '<br>' + esc_(mask_(s.emailFull)) : '') + '<br>Ref ' + esc_(String(s.sh).slice(0, 12)) : '') + '</td></tr>';
   });
   h += '</table></div>';
