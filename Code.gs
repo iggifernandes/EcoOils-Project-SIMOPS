@@ -562,12 +562,12 @@ function pdfHtml_(m) {
   const TH = 'style="background:#eeeeee;border:1px solid ' + LN + ';padding:4px;text-align:left;font-size:9px;letter-spacing:1px"';
   const TD = 'style="border:1px solid ' + LN + ';padding:4px;vertical-align:top;font-size:10px"';
   const T = 'width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse"';
-  const H3 = function (n, t) { return '<h3 style="margin:14px 0 4px 0;font-size:12px;letter-spacing:2px;color:' + GR + '">' + n + '. ' + t + '</h3>'; };
+  const H3 = function (n, t) { return '<h3 style="margin:14px 0 4px 0;font-size:12px;letter-spacing:2px;color:' + GR + '">' + (typeof n === 'number' ? n + '. ' : '') + t + '</h3>'; };
   const dt = String(m.date || '').slice(0, 10);
   let h = '<html><body style="font-family:Arial,Helvetica,sans-serif;font-size:10.5px;color:#111111">';
   h += '<table ' + T + '><tr><td style="border-bottom:3px solid ' + G + ';padding-bottom:6px" width="110"><img src="' + LOGO_ + '" width="95"></td><td style="border-bottom:3px solid ' + G + ';padding-bottom:6px"><div style="font-size:19px;letter-spacing:4px;color:#333333"><b>SIMOPS MEETING RECORD</b></div><div style="color:#777777;font-size:9px;letter-spacing:2px;margin-top:3px">EcoOils Sei Mangkei &nbsp;|&nbsp; OFFICIAL ELECTRONIC RECORD</div></td>' +
     '<td align="right" style="border-bottom:3px solid ' + G + ';padding-bottom:6px;font-size:10px"><b style="color:' + G + '">' + (m.status === 'done' ? 'SIGNED AND SEALED' : 'DRAFT') + '</b><br>Ref ' + esc_(String(m.id || '').slice(0, 8).toUpperCase()) + '</td></tr></table>';
-  h += '<table ' + T + ' style="margin-top:8px"><tr><td ' + TD + '><span style="color:#777777;font-size:8px">HOST</span><br><b>' + esc_(m.host) + '</b></td><td ' + TD + '><span style="color:#777777;font-size:8px">DATE</span><br><b>' + esc_(dt) + '</b></td><td ' + TD + '><span style="color:#777777;font-size:8px">TIME</span><br><b>' + esc_(m.time) + '</b></td><td ' + TD + '><span style="color:#777777;font-size:8px">COMPANIES</span><br><b>' + (m.parts || []).length + '</b></td></tr></table>';
+  h += '<table ' + T + ' style="margin-top:8px"><tr><td ' + TD + '><span style="color:#777777;font-size:8px">HOST</span><br><b>' + esc_(m.host) + '</b></td><td ' + TD + '><span style="color:#777777;font-size:8px">DATE</span><br><b>' + esc_(dt) + '</b></td><td ' + TD + '><span style="color:#777777;font-size:8px">TIME</span><br><b>' + esc_(m.time) + '</b></td><td ' + TD + '><span style="color:#777777;font-size:8px">CONTRACTORS</span><br><b>' + (m.parts || []).length + '</b></td></tr></table>';
   if (cl.length) h += '<p style="background:#fff3cd;padding:6px;border:1px solid #e6c200;margin:8px 0"><b>Possible clashes to manage:</b><br>' + cl.map(esc_).join('<br>') + '</p>';
   h += H3(1, 'PLANNED ACTIVITIES AND AGREED CONSTRAINTS');
   h += '<table ' + T + '><tr><th ' + TH + '>CONTRACTOR</th><th ' + TH + '>AREA</th><th ' + TH + '>PLANNED ACTIVITY</th><th ' + TH + '>AGREED CONSTRAINT</th></tr>';
@@ -579,20 +579,16 @@ function pdfHtml_(m) {
     });
   });
   h += '</table>';
-  let anyAtt = false, ah = H3(2, 'ATTENDANCE') + '<table ' + T + '><tr><th ' + TH + '>COMPANY</th><th ' + TH + '>NAME</th><th ' + TH + '>POSITION</th><th ' + TH + '>STATUS</th></tr>';
+  let anyAtt = false, ah = H3(2, 'ATTENDANCE') + '<table ' + T + '><tr><th ' + TH + '>CONTRACTOR</th><th ' + TH + '>NAME</th><th ' + TH + '>POSITION</th><th ' + TH + '>STATUS</th></tr>';
   CODES.forEach(function (c) {
     const a = (m.att && m.att[c]) || []; if (!a.length) return; anyAtt = true;
     a.forEach(function (x, i) { ah += '<tr>' + (i === 0 ? '<td ' + TD + ' rowspan="' + a.length + '"><b>' + esc_(NAMES[c]) + '</b></td>' : '') + '<td ' + TD + '>' + esc_(x.n) + '</td><td ' + TD + '>' + esc_(x.p) + '</td><td ' + TD + ' align="center">' + (x.x ? '<b style="color:' + G + '">Present</b>' : 'Absent') + '</td></tr>'; });
   });
   if (anyAtt) h += ah + '</table>';
-  if (m.photos && m.photos.length) {
-    h += H3(3, 'MEETING PHOTO');
-    m.photos.forEach(function (p) { h += '<p style="margin:4px 0"><img src="' + p + '" width="330" style="border:1px solid ' + LN + '"></p>'; });
-  }
-  if (m.hostc) h += H3(4, 'HOST COMMENTS') + '<p style="margin:2px 0;border-left:3px solid ' + LN + ';padding-left:8px">' + esc_(m.hostc).replace(/\n/g, '<br>') + '</p>';
-  h += '<div style="page-break-inside:avoid">' + H3(5, 'SIGN-OFF');
+  if (m.hostc) h += H3(3, 'HOST COMMENTS') + '<p style="margin:2px 0;border-left:3px solid ' + LN + ';padding-left:8px">' + esc_(m.hostc).replace(/\n/g, '<br>') + '</p>';
+  h += '<div style="page-break-inside:avoid">' + H3(4, 'SIGN-OFF');
   const byCode = (m.v === 2);
-  h += '<p style="font-size:9px;color:' + GR + ';margin:2px 0 6px 0">Each signatory confirmed that they represent the party shown, attended the meeting, and that this record is accurate and agreed. ' + (byCode ? 'Each signature was made with the personal sign-off code issued by the HSSE Admin' : 'Each signature was verified by a one-time code sent to the signatory\'s registered email') + ' and is sealed to the content hash below.</p>';
+  h += '<p style="font-size:9px;color:' + GR + ';margin:2px 0 6px 0">Each signatory confirmed that they represent the contractor or party shown, attended the meeting, and that this record is accurate and agreed. ' + (byCode ? 'Each signature was made with the personal sign-off code issued by the HSSE Admin' : 'Each signature was verified by a one-time code sent to the signatory\'s registered email') + ' and is sealed to the content hash below.</p>';
   h += '<table ' + T + '><tr><th ' + TH + '>ROLE</th><th ' + TH + '>NAME AND POSITION</th><th ' + TH + '>SIGNATURE</th><th ' + TH + '>VERIFICATION</th></tr>';
   (m.v === 2 ? ['ack', 'noted'] : required_(m)).forEach(function (k) {
     const s = m.sign[k], ab = m.absent && m.absent[k];
@@ -602,6 +598,10 @@ function pdfHtml_(m) {
   });
   h += '</table></div>';
   h += '<p style="font-size:8px;color:#777777;margin-top:14px;border-top:1px solid ' + LN + ';padding-top:5px">Content hash (SHA-256): ' + esc_(m.H) + '<br>Seal: ' + esc_(m.seal) + '<br>Verify this record online: ' + esc_(m.base) + '?v=' + esc_(m.id) + '</p>';
+  if (m.photos && m.photos.length) {
+    h += '<div style="page-break-before:always"></div>' + H3('Annex', 'MEETING PHOTO (SUPPORTING PROOF)');
+    m.photos.forEach(function (p) { h += '<p style="margin:4px 0"><img src="' + p + '" width="460" style="border:1px solid ' + LN + '"></p>'; });
+  }
   h += '</body></html>';
   return h;
 }
