@@ -1,4 +1,4 @@
-// VERSION: 5.9.0 - EcoOils Rep chooses "EcoOils Project Rep" or "EcoOils Operations Rep" when signing (sealed and shown on the PDF); signed PDF with logo, photo on page 2
+// VERSION: 5.10.0 - Admin, EcoOils Rep and EcoOils HSSE can edit and add constraints until signing starts; EcoOils Rep signs as Project or Operations Rep; signed PDF with logo, photo on page 2
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > Project Settings > Script properties > add HOST_EMAILS = the HSSE host email(s) >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -477,6 +477,29 @@ function handle_(b) {
     if (!okEmail_(em)) return { ok: false, error: 'a valid email is required (used to verify your signature)' };
     m.con[b.c] = { name: b.name || '', email: em, rows: b.rows || [], updated: new Date().toISOString() };
     save_(m); return { ok: true };
+  }
+  if (b.action === 'consEdit') {   // Admin (host link), EcoOils Rep and EcoOils HSSE can edit or add constraints until signing starts
+    const ctl = CTL.indexOf(b.c) >= 0 && roleAuth_(m, b);
+    if (m.v !== 2 || !(isHost || ctl)) return { ok: false, error: 'invalid sign-in' };
+    if (m.status !== 'open' && m.status !== 'discussion') return { ok: false, error: 'constraints are locked once signing starts' };
+    const by = isHost ? 'Admin' : (b.c === 'ack' ? 'EcoOils Rep' : 'EcoOils HSSE');
+    let n = 0;
+    (Array.isArray(b.edits) ? b.edits : []).forEach(function (e) {
+      const rows = e && m.con[e.c] && m.con[e.c].rows, i = e ? parseInt(e.i, 10) : -1;
+      if (!rows || !(i >= 0 && i < rows.length)) return;
+      const v = String(e.constraint || '').trim().slice(0, 300);
+      if (v !== String(rows[i].constraint || '')) { rows[i].constraint = v; rows[i].ed = by; n++; }
+    });
+    (Array.isArray(b.adds) ? b.adds : []).slice(0, 20).forEach(function (a) {
+      if (!a || CODES.indexOf(a.c) < 0) return;
+      const act = String(a.activity || '').trim().slice(0, 200), cons = String(a.constraint || '').trim().slice(0, 300);
+      if (!act || !cons) return;
+      m.con[a.c] = m.con[a.c] || { name: '', rows: [] };
+      m.con[a.c].rows = (m.con[a.c].rows || []).concat([{ area: String(a.area || '').trim().toUpperCase().slice(0, 100), activity: act, details: '', constraint: cons, ed: by }]);
+      n++;
+    });
+    if (n) m.log = (m.log || []).concat([{ at: new Date().toISOString(), c: 'constraints', by: by }]).slice(-40);
+    save_(m, true); return Object.assign({ ok: true, changed: n }, view_(m, b));
   }
   if (b.action === 'people') {
     const w = b.c;
