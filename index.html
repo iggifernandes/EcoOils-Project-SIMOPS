@@ -88,14 +88,14 @@ canvas.pad{width:100%;height:clamp(90px,18vh,170px);border:1px dashed var(--grey
 <header>
   <img class="logo" src="logo.png" alt="EcoOils Mentari" style="height:clamp(36px,6vw,56px);width:auto;max-width:100%;display:block">
   <h1 data-t="title">SIMOPS Meeting Record</h1>
-  <div class="rt"><div class="ver">v5.3.0</div>
+  <div class="rt"><div class="ver" id="verlbl"></div>
     <div class="lang"><button data-l="en">EN</button><button data-l="id">ID</button><button data-l="ms">MS</button></div></div>
 </header>
 <main id="app"><div class="ld"><span class="sp"></span> Loading…</div></main>
 <div id="peek"><img alt=""></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
-const VERSION='5.3.1';
+const VERSION='5.3.1';document.getElementById('verlbl').textContent='v'+VERSION;
 const API_URL='https://script.google.com/macros/s/AKfycbz9C-pbRRJ0Rf1EseelBe1IGp0FkydwoIZ0e1xoBgC_Wkxl7C7dkOhFh3c9v2EczQCMCA/exec';
 const CODES=['KKS','WEN','GSB','PBS','ECO','OT1','OT2'];
 const ROLES=[...CODES,'ack','noted'];
