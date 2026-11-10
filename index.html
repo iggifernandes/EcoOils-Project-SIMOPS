@@ -95,7 +95,7 @@ canvas.pad{width:100%;height:clamp(90px,18vh,170px);border:1px dashed var(--grey
 <div id="peek"><img alt=""></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
-const VERSION='5.8.0';document.getElementById('verlbl').textContent='v'+VERSION;
+const VERSION='5.9.1';document.getElementById('verlbl').textContent='v'+VERSION;
 const API_URL='https://script.google.com/macros/s/AKfycbz9C-pbRRJ0Rf1EseelBe1IGp0FkydwoIZ0e1xoBgC_Wkxl7C7dkOhFh3c9v2EczQCMCA/exec';
 const CODES=['KKS','WEN','GSB','PBS','ECO','EOO','OT1','OT2'];
 const ROLES=[...CODES,'ack','noted'];
@@ -132,6 +132,9 @@ async function post(b){for(let i=0;;i++){try{const r=await fetch(API_URL,{method
 async function get(p){p=Object.assign({},p);if('c' in p){p.cc=p.c;delete p.c}   // a GET parameter named exactly "c" is dropped by the Apps Script gateway ("Failed to fetch"), so it travels as "cc"
   for(let i=0;;i++){try{const r=await fetch(API_URL+'?'+new URLSearchParams(p));return await r.json()}catch(e){if(i>=1)throw e;await new Promise(z=>setTimeout(z,600))}}}
 const msg=s=>alert(s);
+function toast(s){let d=document.getElementById('toast');if(!d){d=document.createElement('div');d.id='toast';d.style.cssText='position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1f2933;color:#fff;padding:10px 18px;border-radius:8px;font-size:15px;z-index:99;box-shadow:0 2px 10px rgba(0,0,0,.3)';document.body.appendChild(d)}
+  d.textContent=s;d.style.display='block';clearTimeout(d._t);d._t=setTimeout(()=>d.style.display='none',2200)}
+function applyR(r){if(r&&r.ok&&r.meeting){M=r.meeting;role=r.role||role;dirty=false;if(role==='host')hostView();else if(role==='con')partyView();else publicView();return true}return false}
 async function busy(btn,fn){if(btn.disabled)return;const o=btn.textContent;btn.disabled=true;btn.textContent=t('saving');
   try{await fn()}catch(e){msg(t('neterr'))}finally{btn.disabled=false;btn.textContent=o}}
 
@@ -247,16 +250,16 @@ function bindShare(){
 function joinCard(c){
   if(!(M.status==='open'||M.status==='discussion'))return '';
   const nm=ls('simopsName')||'';
-  return `<div class="card"><h2>${t('att')}</h2><div class="grid"><div><label>${t('yourname')}</label><input id="jn" value="${esc(nm)}" autocomplete="off"></div><div><label>${t('pos')}</label><select id="jp">${posOpts('')}</select><input id="jp2" placeholder="${t('pos')}" style="display:none;margin-top:4px"></div></div><button class="btn" id="jgo">${t('joinm')}</button><span id="jmsg" class="mut"></span></div>`}
+  return `<div class="card"><h2>${t('att')}</h2><div class="grid"><div><label>${t('yourname')}</label><input id="jn" value="${esc(nm)}" autocomplete="off"></div><div><label>${t('pos')}</label><select id="jp">${posOpts(POSITIONS.includes(ls('simopsPos'))?ls('simopsPos'):'')}</select><input id="jp2" placeholder="${t('pos')}" style="display:none;margin-top:4px"></div></div><button class="btn" id="jgo">${t('joinm')}</button><span id="jmsg" class="mut"></span></div>`}
 function bindJoin(c){
   const b=$('#jgo');if(!b)return;
   const ps=$('#jp');ps.onchange=()=>{$('#jp2').style.display=ps.value==='__other'?'':'none'};
   b.onclick=async()=>{const n=$('#jn').value.trim(),p=ps.value==='__other'?$('#jp2').value.trim():ps.value;if(!n||!p)return msg(t('needagree').split('.')[0]+'.');
     try{localStorage.simopsName=n}catch(e){}
     const list=(((M.att||{})[c])||[]).map(x=>({...x}));const ex=list.find(x=>x.n.toLowerCase()===n.toLowerCase());if(ex){ex.p=p;ex.x=true}else list.push({n,p,x:true});
-    const r=await post({action:'people',id:MID,...AUTH(),c,list});if(r.ok){msg(t('joined'));load()}else msg(r.error||t('err'))}}
+    const r=await post({action:'people',id:MID,...AUTH(),c,list});if(r.ok){try{localStorage.simopsPos=p}catch(e){}toast(t('joined'));if(!applyR(r))load()}else msg(r.error||t('err'))}}
 function bindAttDel(c){
-  document.querySelectorAll('[data-ad]').forEach(b=>b.onclick=async()=>{const i=+b.dataset.ad,list=(((M.att||{})[c])||[]).filter((x,k)=>k!==i);const r=await post({action:'people',id:MID,...AUTH(),c,list});if(r.ok)load();else msg(r.error||t('err'))})}
+  document.querySelectorAll('[data-ad]').forEach(b=>b.onclick=async()=>{const i=+b.dataset.ad,list=(((M.att||{})[c])||[]).filter((x,k)=>k!==i);const r=await post({action:'people',id:MID,...AUTH(),c,list});if(r.ok){if(!applyR(r))load()}else msg(r.error||t('err'))})}
 function ctlCard(){
   const live=M.status!=='done',ph=(M.photos||[]).length,ent=CODES.some(c=>((M.con[c]&&M.con[c].rows)||[]).length);
   const other=CC==='ack'?'noted':'ack',otherSigned=M.sign&&M.sign[other],ab=M.absent&&M.absent[other];
@@ -403,7 +406,7 @@ function hostView(){
   if(M.status==='signing'&&!Object.keys(M.sign||{}).length)h+=`<button class="btn sec" data-st="discussion">${t('back')}</button>`;
   h+=`</div>`;
   if(sIdx()>=1||M.v===2)h+=photosCard(M.status==='discussion'||(M.v===2&&M.status==='open'));
-  h+=`<div class="card"><label>${t('hc')}</label><textarea id="hc" ${dis}>${esc(M.hostc||'')}</textarea><button class="btn" id="shc" ${dis}>${t('savehc')}</button><button type="button" class="btn sec" id="hreg" ${dis}>${t('regfix')}</button><button type="button" class="btn sec" id="hpol" ${dis}>✨ ${t('polish')}</button><div id="hpres"></div></div>`;
+  h+=`<div class="card"><label>${t('hc')}</label><textarea id="hc" ${dis}>${esc(M.hostc||'')}</textarea><button class="btn" id="shc" ${dis}>${t('savehc')}</button><button type="button" class="btn sec" id="hreg" ${dis}>${t('regfix')}</button><div id="hpres"></div></div>`;
   h+=sigCards();
   if(done)h+=`<div class="card"><div class="okb">${t('done')}</div>${M.pdf?`<a class="btn" target="_blank" href="${M.pdf}">${t('pdf')}</a>`:''}<button class="btn sec" id="rs">${t('resend')}</button></div>`+shareCard();
   $('#app').innerHTML=h;
@@ -412,11 +415,6 @@ function hostView(){
   bindShare();
   $('#sd').onclick=async()=>{const r=await post({action:'meta',id:MID,ht:HT,host:$('#d_host').value,date:$('#d_date').value,time:$('#d_time').value,hostEmails:$('#d_em').value,ackEmail:$('#d_ack').value,notedEmail:$('#d_nt').value,areas:$('#d_areas').value.split('\n').map(s=>s.trim()).filter(Boolean)});msg(r.ok?t('saved'):(r.error||t('err')));dirty=false;load()};
   $('#hreg').onclick=()=>regFix([$('#hc')],$('#hpres'));
-  $('#hpol').onclick=async()=>{const el=$('#hc'),tx=el.value.trim(),bx=$('#hpres');if(tx.length<3){bx.innerHTML=`<div class="mut">${t('polnone')}</div>`;return}
-    bx.innerHTML=`<div class="mut">${t('polbusy')}</div>`;const r=await Promise.race([post({action:'polish',id:MID,ht:HT,texts:[tx]}),new Promise(res=>setTimeout(()=>res({ok:false}),12000))]);const ai=!!(r&&r.ok&&r.texts&&r.texts[0]),neu=ai?r.texts[0]:await fixText(tx);
-    if(!neu||neu===tx){bx.innerHTML=`<div class="okb">${t('polgood')}</div>`;return}
-    bx.innerHTML=`<div class="card" style="margin:6px 0">${ai?'':`<div class="mut" style="margin-bottom:6px">${t('polbasic')}</div>`}<div class="mut">${esc(tx)}</div><div style="margin:2px 0 8px"><b>→ ${esc(neu)}</b></div><button type="button" class="btn pu">${t('poluse')}</button><button type="button" class="btn sec pk">${t('polkeep')}</button></div>`;
-    bx.querySelector('.pu').onclick=()=>{el.value=neu;dirty=true;bx.innerHTML=''};bx.querySelector('.pk').onclick=()=>{bx.innerHTML=''}};
   $('#shc').onclick=async()=>{const r=await post({action:'meta',id:MID,ht:HT,hostc:$('#hc').value});msg(r.ok?t('saved'):(r.error||t('err')));dirty=false};
   const rs=$('#rs');if(rs)rs.onclick=async()=>{const r=await post({action:'resend',id:MID,ht:HT});msg(r.ok?t('sendall'):(r.error||t('err')))};
   bindPhotos();
@@ -485,24 +483,6 @@ async function regFix(els,bx){const prev=els.map(e=>e.value);let ch=0;bx.innerHT
   if(!ch){bx.innerHTML=`<div class="mut">${t('regsame')}</div>`;return}
   dirty=true;bx.innerHTML=`<div class="okb">${t('regdone')} <button type="button" class="btn sec ru">${t('regundo')}</button></div>`;
   bx.querySelector('.ru').onclick=()=>{els.forEach((e,i)=>e.value=prev[i]);bx.innerHTML=''}}
-async function polishRow(d){
-  const fs=[['.rd']];const rcv=d.querySelector('.rc');if(rcv&&rcv.style.display!=='none')fs.push(['.rc']);const ov=d.querySelector('.rbo');if(ov&&ov.style.display!=='none')fs.unshift(['.rbo']);
-  const items=fs.map(([q])=>({el:d.querySelector(q),text:d.querySelector(q).value.trim()})).filter(x=>x.text.length>=3);
-  const box=d.querySelector('.pres'),btn=d.querySelector('.pol');
-  if(!items.length){box.innerHTML=`<div class="mut">${t('polnone')}</div>`;return}
-  btn.disabled=true;box.innerHTML=`<div class="mut">${t('polbusy')}</div>`;
-  const out=[];let basic=false;
-  const r=await Promise.race([post({action:'polish',id:MID,...AUTH(),texts:items.map(x=>x.text)}),new Promise(res=>setTimeout(()=>res({ok:false,timeout:true}),12000))]);
-  for(const [i,it] of items.entries()){if(r&&r.ok&&r.texts&&r.texts[i])out.push({el:it.el,old:it.text,neu:r.texts[i]});else{basic=true;out.push({el:it.el,old:it.text,neu:await fixText(it.text)})}}
-  btn.disabled=false;
-  const ch=out.filter(x=>x.neu&&x.neu!==x.old);
-  if(!ch.length){box.innerHTML=`<div class="okb">${t('polgood')}</div>`;return}
-  box.innerHTML=`<div class="card" style="margin:6px 0">${basic?`<div class="mut" style="margin-bottom:6px">${t('polbasic')}</div>`:''}${ch.map(x=>`<div class="mut">${esc(x.old)}</div><div style="margin:2px 0 8px"><b>→ ${esc(x.neu)}</b></div>`).join('')}<button type="button" class="btn pu">${t('poluse')}</button><button type="button" class="btn sec pk">${t('polkeep')}</button></div>`;
-  box.querySelector('.pu').onclick=()=>{ch.forEach(x=>{x.el.value=x.neu});dirty=true;box.innerHTML=''};
-  box.querySelector('.pk').onclick=()=>{box.innerHTML=''};
-}
-
-/* ---------- PARTY (contractor / ack / noted) ---------- */
 function partyView(){
   const isCon=CODES.includes(CC),e=(M.con&&M.con[CC])||{},open=M.status==='open';
   const dr=(isCon&&open)?loadDraft():null;
@@ -531,15 +511,14 @@ function partyView(){
       d.innerHTML=`<div class="ar"><select class="ra"><option value="">${t('area')}…</option>${L.map(a=>`<option value="${esc(a)}" ${!isOther&&cur.toUpperCase()===a?'selected':''}>${esc(a)}</option>`).join('')}<option value="__other" ${isOther?'selected':''}>${t('other')}</option></select><input class="ro" placeholder="${t('area')}" value="${isOther?esc(cur):''}" style="margin-top:4px;${isOther?'':'display:none'}"></div>
       <div class="ar"><select class="rb"><option value="">${t('activity')}…</option>${Object.keys(ACTS).map(g=>`<optgroup label="${esc(g)}">${ACTS[g].map(a=>`<option value="${esc(a)}" ${!aOther&&ca===a?'selected':''}>${esc(a)}</option>`).join('')}</optgroup>`).join('')}<option value="__other" ${aOther?'selected':''}>${t('other')}</option></select><input class="rbo" placeholder="${t('activity')}" value="${aOther?esc(ca):''}" style="margin-top:4px;${aOther?'':'display:none'}"></div>
       <textarea class="rd" rows="2" placeholder="${t('details')}">${esc(r.details||'')}</textarea><div class="ar" style="grid-column:1/-1"><select class="rk"><option value="">${t('constraint')}…</option>${CONS.map(c=>`<option value="${esc(c)}" ${!kOther&&cc2===c?'selected':''}>${esc(c)}</option>`).join('')}<option value="__other" ${kOther?'selected':''}>${t('other')}</option></select><input class="rc" placeholder="${t('constraint')}" value="${kOther?esc(cc2):''}" style="margin-top:4px;${kOther?'':'display:none'}"></div><button class="x">×</button>
-      <div class="pw" style="grid-column:1/-1"><button type="button" class="btn sec reg">${t('regfix')}</button><button type="button" class="btn sec pol">✨ ${t('polish')}</button><div class="pres"></div></div>`;
-      d.querySelector('.pol').onclick=()=>polishRow(d);
+      <div class="pw" style="grid-column:1/-1"><button type="button" class="btn sec reg">${t('regfix')}</button><div class="pres"></div></div>`;
       d.querySelector('.reg').onclick=()=>regFix([...d.querySelectorAll('.rd,.rc,.rbo,.ro')],d.querySelector('.pres'));
       [['.ra','.ro'],['.rb','.rbo'],['.rk','.rc']].forEach(([a,b])=>{const sel=d.querySelector(a),oth=d.querySelector(b);sel.onchange=()=>{oth.style.display=sel.value==='__other'?'':'none';dirty=true}});
       d.querySelector('.x').onclick=()=>{if(box.children.length>1)d.remove()};box.appendChild(d)};
     rows.forEach(add);$('#ar').onclick=()=>add({area:'',activity:'',constraint:''});
     $('#se').onclick=()=>busy($('#se'),async()=>{const rs=collectRows(box).filter(r=>r.area||r.activity||r.details||r.constraint);
       try{localStorage.simopsName=$('#c_name').value.trim()}catch(e){}
-      const r=await post({action:'entry',id:MID,...AUTH(),name:$('#c_name').value,email:$('#c_em')?$('#c_em').value:'',rows:rs});if(r.ok)clearDraft();msg(r.ok?t('saved'):(r.error||t('err')));dirty=false;load()});
+      const r=await post({action:'entry',id:MID,...AUTH(),name:$('#c_name').value,email:$('#c_em')?$('#c_em').value:'',rows:rs});if(r.ok)clearDraft();if(r.ok)toast(t('saved'));else msg(r.error||t('err'));dirty=false;if(!applyR(r))load()});
   }
   bindSign();bindPhotos();bindShare();bindCtl();bindJoin(CC);bindAttDel(CC);bindUnlock();
   const cc=$('#chco');if(cc)cc.onclick=()=>{try{localStorage.removeItem('simopsCR');sessionStorage.removeItem('simopsStay')}catch(e){}location.href=BASE};

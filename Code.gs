@@ -1,4 +1,4 @@
-// VERSION: 5.6.0 - Admin can see and reset the EcoOils Rep / HSSE sign-off codes
+// VERSION: 5.7.0 - faster saves (no register write for plain edits, fresh meeting in the same response); AI check removed
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > Project Settings > Script properties > add HOST_EMAILS = the HSSE host email(s) >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -169,10 +169,11 @@ function csess_(s) { return lsGet_('c', s); }
 function roleAuth_(m, b) { return !!(b.c && ((m.tok[b.c] && m.tok[b.c] === b.t) || (b.s && csess_(b.s) === b.c))); }
 
 // ---------- storage ----------
-function save_(m) {
+function save_(m, fast) {   // fast: plain content edits (entries, attendance, photos) skip the register row, which saves a second or two
   m.updated = new Date().toISOString();
   const f = file_(m.id), body = JSON.stringify(m);
   if (f) f.setContent(body); else folder_().createFile('M_' + m.id + '.json', body, MimeType.PLAIN_TEXT);
+  if (fast && f) return;
   const sh = sheet_();
   const row = [m.id, m.date, m.time, m.host, m.status, (m.parts || []).map(function (c) { return NAMES[c]; }).join(', '), clashList_(m).join('; '), m.updated, m.pdf || '', m.owner || '', m.ht];
   const last = sh.getLastRow();
@@ -412,7 +413,8 @@ function handle_(b) {
     return { ok: true, name: 'SIMOPS_Meeting_Record_' + String(m.date).slice(0, 10) + '.pdf', data: Utilities.base64Encode(blob.getBytes()) };
   }
   // ----- AI wording check (free Gemini tier; key lives in Script Properties as GEMINI_API_KEY, never in code) -----
-  if (b.action === 'polish') {
+  if (b.action === 'polish') return { ok: false, error: 'AI check is removed; use the basic correction' };
+  if (b.action === 'polish_old') {
     if (!(isHost || roleAuth_(m, b) || (m.v === 2 && CODES.indexOf(b.c) >= 0))) return { ok: false, error: 'choose your company first' };
     if (m.status !== 'open' && !isHost) return { ok: false, error: 'entries are locked' };
     const key = props_().getProperty('GEMINI_API_KEY');
@@ -466,7 +468,7 @@ function handle_(b) {
     if (!nm) return { ok: false, error: 'enter your name' };
     m.con[b.c] = { name: nm, rows: b.rows || [], updated: new Date().toISOString() };
     m.log = (m.log || []).concat([{ at: new Date().toISOString(), c: b.c, by: nm }]).slice(-40);
-    save_(m); return { ok: true };
+    save_(m, true); return Object.assign({ ok: true }, view_(m, b));   // returns the fresh meeting so the app needs no second request
   }
   if (b.action === 'entry') {
     if (!(CODES.indexOf(b.c) >= 0 && roleAuth_(m, b))) return { ok: false, error: 'invalid sign-in' };
@@ -484,7 +486,7 @@ function handle_(b) {
       return { n: String((x && x.n) || '').trim().slice(0, 60), p: String((x && x.p) || '').trim().slice(0, 60), x: !!(x && x.x) };
     }).filter(function (x) { return x.n; });
     m.att = m.att || {}; m.att[w] = list;
-    save_(m); return { ok: true };
+    save_(m, true); return Object.assign({ ok: true }, view_(m, b));
   }
   if (b.action === 'status') {
     if (!isCtl) return { ok: false, error: 'HOD, HSSE or host only' };
@@ -508,7 +510,7 @@ function handle_(b) {
     if (!(isHost || roleAuth_(m, b) || (m.v === 2 && CODES.indexOf(b.c) >= 0))) return { ok: false, error: 'choose your company first' };
     if (m.status !== 'discussion' && !(m.v === 2 && m.status === 'open')) return { ok: false, error: 'photo can be added before signing only' };
     if (m.photos.length >= 4) return { ok: false, error: 'max 4 photos' };
-    m.photos.push(b.data); save_(m); return { ok: true };
+    m.photos.push(b.data); save_(m, true); return Object.assign({ ok: true }, view_(m, b));
   }
   if (b.action === 'otpSend') {
     const w = b.c;
