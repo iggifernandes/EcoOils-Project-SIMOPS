@@ -1,4 +1,4 @@
-// VERSION: 5.14.0 - Several people of one contractor can each enter their own activities (saving replaces only your own rows); EcoOils Rep and EcoOils HSSE sign with the sign-off code and a typed name (no drawn signature); typed name shown as the signature on the PDF; Others present; editable constraints and controls; signed PDF with logo, photo on page 2
+// VERSION: 5.15.0 - Admin, EcoOils Rep and EcoOils HSSE can delete duplicate entries until signing starts; Several people of one contractor can each enter their own activities (saving replaces only your own rows); EcoOils Rep and EcoOils HSSE sign with the sign-off code and a typed name (no drawn signature); typed name shown as the signature on the PDF; Others present; editable constraints and controls; signed PDF with logo, photo on page 2
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > Project Settings > Script properties > add HOST_EMAILS = the HSSE host email(s) >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -502,6 +502,19 @@ function handle_(b) {
       if (!rows || !(i >= 0 && i < rows.length)) return;
       const v = String(e.constraint || '').trim().slice(0, 300), ct = String(e.controls || '').trim().slice(0, 1000);
       if (v !== String(rows[i].constraint || '') || ct !== String(rows[i].controls || '')) { rows[i].constraint = v; rows[i].controls = ct; rows[i].ed = by; n++; }
+    });
+    const dels = {};   // delete duplicate or wrong entries: the row must still match what the person saw (activity and area), so a stale screen can never delete the wrong row
+    (Array.isArray(b.dels) ? b.dels : []).slice(0, 30).forEach(function (d) {
+      const rows = d && m.con[d.c] && m.con[d.c].rows, i = d ? parseInt(d.i, 10) : -1;
+      if (!rows || !(i >= 0 && i < rows.length)) return;
+      if (String(rows[i].activity || '') !== String(d.act || '') || String(rows[i].area || '') !== String(d.area || '')) return;
+      (dels[d.c] = dels[d.c] || []).push(i);
+    });
+    Object.keys(dels).forEach(function (c) {
+      const rows = m.con[c].rows;
+      dels[c].filter(function (x, k, a) { return a.indexOf(x) === k; }).sort(function (x, y) { return y - x; }).forEach(function (i) { rows.splice(i, 1); n++; });
+      const names = []; rows.forEach(function (r) { if (r.by && names.indexOf(r.by) < 0) names.push(r.by); });
+      m.con[c].name = rows.length ? (names.join(', ') || m.con[c].name) : '';
     });
     (Array.isArray(b.adds) ? b.adds : []).slice(0, 20).forEach(function (a) {
       if (!a || CODES.indexOf(a.c) < 0) return;
