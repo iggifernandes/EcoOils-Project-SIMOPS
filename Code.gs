@@ -1,4 +1,4 @@
-// VERSION: 5.15.0 - Admin, EcoOils Rep and EcoOils HSSE can delete duplicate entries until signing starts; Several people of one contractor can each enter their own activities (saving replaces only your own rows); EcoOils Rep and EcoOils HSSE sign with the sign-off code and a typed name (no drawn signature); typed name shown as the signature on the PDF; Others present; editable constraints and controls; signed PDF with logo, photo on page 2
+// VERSION: 5.16.0 - Each activity can be marked Extended hours, Night shift or SIMOPS; Admin, EcoOils Rep and EcoOils HSSE can delete duplicate entries until signing starts; Several people of one contractor can each enter their own activities (saving replaces only your own rows); EcoOils Rep and EcoOils HSSE sign with the sign-off code and a typed name (no drawn signature); typed name shown as the signature on the PDF; Others present; editable constraints and controls; signed PDF with logo, photo on page 2
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > Project Settings > Script properties > add HOST_EMAILS = the HSSE host email(s) >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -82,11 +82,12 @@ function openNext_(m) {
   return n;
 }
 
+const WT_ = { ext: 'Extended hours', night: 'Night shift', simops: 'SIMOPS' };   // work type chosen per activity; none = normal day work
 function content_(m) {
   const con = {};
   CODES.forEach(function (c) {
     const e = m.con[c];
-    if (e && m.parts.indexOf(c) >= 0) con[c] = { name: e.name, rows: e.rows.map(function (r) { var o = { area: r.area, activity: r.activity, details: r.details || '', constraint: r.constraint }; if (r.controls) o.controls = r.controls; if (r.by) o.by = r.by; return o; }) };
+    if (e && m.parts.indexOf(c) >= 0) con[c] = { name: e.name, rows: e.rows.map(function (r) { var o = { area: r.area, activity: r.activity, details: r.details || '', constraint: r.constraint }; if (r.controls) o.controls = r.controls; if (r.by) o.by = r.by; if (WT_[r.wt]) o.wt = r.wt; return o; }) };
   });
   const out = { id: m.id, host: m.host, date: m.date, time: m.time, parts: m.parts, con: con, hostc: m.hostc || '', photos: (m.photos || []).map(sha_) };
   const att = {};
@@ -472,6 +473,7 @@ function handle_(b) {
     const mine = (Array.isArray(b.rows) ? b.rows : []).slice(0, 60).map(function (r) {
       const o = { area: String(r.area || '').slice(0, 100), activity: String(r.activity || '').slice(0, 200), details: String(r.details || '').slice(0, 1000), constraint: String(r.constraint || '').slice(0, 300), by: nm };
       if (r.controls) o.controls = String(r.controls).slice(0, 1000);
+      if (WT_[r.wt]) o.wt = r.wt;
       if (r.ed) o.ed = String(r.ed).slice(0, 40);
       return o;
     });
@@ -638,7 +640,7 @@ function pdfHtml_(m) {
     const rows = (m.con[c] && m.con[c].rows) || []; if (!rows.length) return;
     rows.forEach(function (r, i) {
       h += '<tr>' + (i === 0 ? '<td ' + TD + ' rowspan="' + rows.length + '"><b>' + esc_(NAMES[c]) + '</b>' + (m.con[c].name ? '<br><span style="font-size:8px;color:#777777">entered by ' + esc_(m.con[c].name) + '</span>' : '') + '</td>' : '') +
-        '<td ' + TD + '>' + esc_(r.area) + '</td><td ' + TD + '>' + esc_(r.activity) + (r.details ? '<br><i style="color:#555555">' + esc_(r.details) + '</i>' : '') + (r.by && String(m.con[c].name || '').indexOf(',') >= 0 ? '<br><span style="font-size:8px;color:#777777">entered by ' + esc_(r.by) + '</span>' : '') + '</td><td ' + TD + '>' + esc_(r.constraint) + (r.controls ? '<br><b>Controls:</b> ' + esc_(r.controls).replace(/\n/g, '<br>') : '') + (r.ed ? '<br><span style="font-size:8px;color:#777777">updated by ' + esc_(r.ed) + '</span>' : '') + '</td></tr>';
+        '<td ' + TD + '>' + esc_(r.area) + '</td><td ' + TD + '>' + esc_(r.activity) + (WT_[r.wt] ? ' <b style="color:#b45309">[' + WT_[r.wt] + ']</b>' : '') + (r.details ? '<br><i style="color:#555555">' + esc_(r.details) + '</i>' : '') + (r.by && String(m.con[c].name || '').indexOf(',') >= 0 ? '<br><span style="font-size:8px;color:#777777">entered by ' + esc_(r.by) + '</span>' : '') + '</td><td ' + TD + '>' + esc_(r.constraint) + (r.controls ? '<br><b>Controls:</b> ' + esc_(r.controls).replace(/\n/g, '<br>') : '') + (r.ed ? '<br><span style="font-size:8px;color:#777777">updated by ' + esc_(r.ed) + '</span>' : '') + '</td></tr>';
     });
   });
   h += '</table>';
