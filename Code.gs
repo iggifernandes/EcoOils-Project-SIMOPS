@@ -1,4 +1,4 @@
-// VERSION: 5.17.0 - One-tap Present / Absent for every listed person; Each activity can be marked Extended hours, Night shift or SIMOPS; Admin, EcoOils Rep and EcoOils HSSE can delete duplicate entries until signing starts; Several people of one contractor can each enter their own activities (saving replaces only your own rows); EcoOils Rep and EcoOils HSSE sign with the sign-off code and a typed name (no drawn signature); typed name shown as the signature on the PDF; Others present; editable constraints and controls; signed PDF with logo, photo on page 2
+// VERSION: 5.18.0 - Edit, delete and merge duplicate names in Attendance; One-tap Present / Absent for every listed person; Each activity can be marked Extended hours, Night shift or SIMOPS; Admin, EcoOils Rep and EcoOils HSSE can delete duplicate entries until signing starts; Several people of one contractor can each enter their own activities (saving replaces only your own rows); EcoOils Rep and EcoOils HSSE sign with the sign-off code and a typed name (no drawn signature); typed name shown as the signature on the PDF; Others present; editable constraints and controls; signed PDF with logo, photo on page 2
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > Project Settings > Script properties > add HOST_EMAILS = the HSSE host email(s) >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -558,6 +558,31 @@ function handle_(b) {
     if (!p) return { ok: false, error: 'person not found' };
     p.x = !!b.x;
     m.log = (m.log || []).concat([{ at: new Date().toISOString(), c: 'presence', by: (isHost ? 'Admin' : (NAMES[b.c] || '')) + ' ' + p.n + (p.x ? ' present' : ' absent') }]).slice(-40);
+    save_(m, true); return Object.assign({ ok: true }, view_(m, b));
+  }
+  if (b.action === 'attEdit' || b.action === 'attDedupe') {   // correct a name or position, delete a person, or merge duplicate names in one contractor's attendance
+    const w = b.pc;
+    if (CODES.indexOf(w) < 0 || !(isHost || m.v === 2 || roleAuth_(m, b))) return { ok: false, error: 'invalid sign-in' };
+    if (m.status !== 'open' && m.status !== 'discussion') return { ok: false, error: 'attendance is locked' };
+    m.att = m.att || {}; const list = m.att[w] = m.att[w] || [], lc = function (x) { return String(x || '').trim().toLowerCase(); };
+    let what = '';
+    if (b.action === 'attDedupe') {
+      const out = []; list.forEach(function (x) { const k = out.filter(function (y) { return lc(y.n) === lc(x.n); })[0]; if (k) { k.x = k.x || x.x; if (!k.p) k.p = x.p; } else out.push(x); });
+      what = 'merged ' + (list.length - out.length) + ' duplicate(s)'; m.att[w] = out;
+    } else {
+      const i = list.map(function (x) { return lc(x.n); }).indexOf(lc(b.n));
+      if (i < 0) return { ok: false, error: 'person not found' };
+      const p = list[i];
+      if (b.del) { what = 'deleted ' + p.n; list.splice(i, 1); }
+      else {
+        const nn = String(b.nn === undefined ? p.n : b.nn).trim().slice(0, 60), pos = String(b.p === undefined ? p.p : b.p).trim().slice(0, 60);
+        if (!nn) return { ok: false, error: 'name required' };
+        const j = list.map(function (x, k) { return k !== i && lc(x.n) === lc(nn) ? k : -1; }).filter(function (k) { return k >= 0; })[0];
+        if (j !== undefined) { list[j].x = list[j].x || p.x; if (pos) list[j].p = pos; list.splice(i, 1); what = 'merged ' + p.n + ' into ' + nn; }
+        else { what = 'edited ' + p.n + (p.n !== nn ? ' to ' + nn : ''); p.n = nn; p.p = pos; }
+      }
+    }
+    m.log = (m.log || []).concat([{ at: new Date().toISOString(), c: 'attendance', by: (isHost ? 'Admin' : (NAMES[b.c] || '')) + ' ' + what }]).slice(-40);
     save_(m, true); return Object.assign({ ok: true }, view_(m, b));
   }
   if (b.action === 'status') {
