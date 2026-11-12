@@ -1,4 +1,4 @@
-// VERSION: 5.16.0 - Each activity can be marked Extended hours, Night shift or SIMOPS; Admin, EcoOils Rep and EcoOils HSSE can delete duplicate entries until signing starts; Several people of one contractor can each enter their own activities (saving replaces only your own rows); EcoOils Rep and EcoOils HSSE sign with the sign-off code and a typed name (no drawn signature); typed name shown as the signature on the PDF; Others present; editable constraints and controls; signed PDF with logo, photo on page 2
+// VERSION: 5.17.0 - One-tap Present / Absent for every listed person; Each activity can be marked Extended hours, Night shift or SIMOPS; Admin, EcoOils Rep and EcoOils HSSE can delete duplicate entries until signing starts; Several people of one contractor can each enter their own activities (saving replaces only your own rows); EcoOils Rep and EcoOils HSSE sign with the sign-off code and a typed name (no drawn signature); typed name shown as the signature on the PDF; Others present; editable constraints and controls; signed PDF with logo, photo on page 2
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > Project Settings > Script properties > add HOST_EMAILS = the HSSE host email(s) >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -548,6 +548,16 @@ function handle_(b) {
       return { n: String((x && x.n) || '').trim().slice(0, 60), p: String((x && x.p) || '').trim().slice(0, 60), x: !!(x && x.x) };
     }).filter(function (x) { return x.n; });
     m.att = m.att || {}; m.att[w] = list;
+    save_(m, true); return Object.assign({ ok: true }, view_(m, b));
+  }
+  if (b.action === 'presence') {   // one tap marks one listed person Present or Absent (atomic: only that person changes, so two people editing at once cannot undo each other)
+    const w = b.pc;
+    if (CODES.indexOf(w) < 0 || !(isHost || m.v === 2 || roleAuth_(m, b))) return { ok: false, error: 'invalid sign-in' };
+    if (m.status !== 'open' && m.status !== 'discussion') return { ok: false, error: 'attendance is locked' };
+    const p = ((m.att && m.att[w]) || []).filter(function (x) { return x.n.toLowerCase() === String(b.n || '').trim().toLowerCase(); })[0];
+    if (!p) return { ok: false, error: 'person not found' };
+    p.x = !!b.x;
+    m.log = (m.log || []).concat([{ at: new Date().toISOString(), c: 'presence', by: (isHost ? 'Admin' : (NAMES[b.c] || '')) + ' ' + p.n + (p.x ? ' present' : ' absent') }]).slice(-40);
     save_(m, true); return Object.assign({ ok: true }, view_(m, b));
   }
   if (b.action === 'status') {
