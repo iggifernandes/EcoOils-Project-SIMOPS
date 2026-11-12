@@ -1,4 +1,4 @@
-// VERSION: 5.18.0 - Edit, delete and merge duplicate names in Attendance; One-tap Present / Absent for every listed person; Each activity can be marked Extended hours, Night shift or SIMOPS; Admin, EcoOils Rep and EcoOils HSSE can delete duplicate entries until signing starts; Several people of one contractor can each enter their own activities (saving replaces only your own rows); EcoOils Rep and EcoOils HSSE sign with the sign-off code and a typed name (no drawn signature); typed name shown as the signature on the PDF; Others present; editable constraints and controls; signed PDF with logo, photo on page 2
+// VERSION: 5.20.0 - Several constraints can be chosen per activity; Controls allow up to 3000 characters (Admin ready-made control lists); Edit, delete and merge duplicate names in Attendance; One-tap Present / Absent for every listed person; Each activity can be marked Extended hours, Night shift or SIMOPS; Admin, EcoOils Rep and EcoOils HSSE can delete duplicate entries until signing starts; Several people of one contractor can each enter their own activities (saving replaces only your own rows); EcoOils Rep and EcoOils HSSE sign with the sign-off code and a typed name (no drawn signature); typed name shown as the signature on the PDF; Others present; editable constraints and controls; signed PDF with logo, photo on page 2
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > Project Settings > Script properties > add HOST_EMAILS = the HSSE host email(s) >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -471,8 +471,8 @@ function handle_(b) {
     // several people of one contractor (e.g. Piping engineer, Structural engineer) each own their rows: saving replaces only this person's rows
     const prev = m.con[b.c] || { name: '', rows: [] }, key = function (x) { return String(x || '').trim().toLowerCase(); };
     const mine = (Array.isArray(b.rows) ? b.rows : []).slice(0, 60).map(function (r) {
-      const o = { area: String(r.area || '').slice(0, 100), activity: String(r.activity || '').slice(0, 200), details: String(r.details || '').slice(0, 1000), constraint: String(r.constraint || '').slice(0, 300), by: nm };
-      if (r.controls) o.controls = String(r.controls).slice(0, 1000);
+      const o = { area: String(r.area || '').slice(0, 100), activity: String(r.activity || '').slice(0, 200), details: String(r.details || '').slice(0, 1000), constraint: String(r.constraint || '').slice(0, 1500), by: nm };
+      if (r.controls) o.controls = String(r.controls).slice(0, 3000);
       if (WT_[r.wt]) o.wt = r.wt;
       if (r.ed) o.ed = String(r.ed).slice(0, 40);
       return o;
@@ -502,7 +502,7 @@ function handle_(b) {
     (Array.isArray(b.edits) ? b.edits : []).forEach(function (e) {
       const rows = e && m.con[e.c] && m.con[e.c].rows, i = e ? parseInt(e.i, 10) : -1;
       if (!rows || !(i >= 0 && i < rows.length)) return;
-      const v = String(e.constraint || '').trim().slice(0, 300), ct = String(e.controls || '').trim().slice(0, 1000);
+      const v = String(e.constraint || '').trim().slice(0, 1500), ct = String(e.controls || '').trim().slice(0, 3000);
       if (v !== String(rows[i].constraint || '') || ct !== String(rows[i].controls || '')) { rows[i].constraint = v; rows[i].controls = ct; rows[i].ed = by; n++; }
     });
     const dels = {};   // delete duplicate or wrong entries: the row must still match what the person saw (activity and area), so a stale screen can never delete the wrong row
@@ -520,8 +520,8 @@ function handle_(b) {
     });
     (Array.isArray(b.adds) ? b.adds : []).slice(0, 20).forEach(function (a) {
       if (!a || CODES.indexOf(a.c) < 0) return;
-      const act = String(a.activity || '').trim().slice(0, 200), cons = String(a.constraint || '').trim().slice(0, 300);
-      const ctl2 = String(a.controls || '').trim().slice(0, 1000);
+      const act = String(a.activity || '').trim().slice(0, 200), cons = String(a.constraint || '').trim().slice(0, 1500);
+      const ctl2 = String(a.controls || '').trim().slice(0, 3000);
       if (!act || !(cons || ctl2)) return;
       m.con[a.c] = m.con[a.c] || { name: '', rows: [] };
       m.con[a.c].rows = (m.con[a.c].rows || []).concat([{ area: String(a.area || '').trim().toUpperCase().slice(0, 100), activity: act, details: '', constraint: cons, controls: ctl2, ed: by, by: '' }]);
@@ -675,7 +675,7 @@ function pdfHtml_(m) {
     const rows = (m.con[c] && m.con[c].rows) || []; if (!rows.length) return;
     rows.forEach(function (r, i) {
       h += '<tr>' + (i === 0 ? '<td ' + TD + ' rowspan="' + rows.length + '"><b>' + esc_(NAMES[c]) + '</b>' + (m.con[c].name ? '<br><span style="font-size:8px;color:#777777">entered by ' + esc_(m.con[c].name) + '</span>' : '') + '</td>' : '') +
-        '<td ' + TD + '>' + esc_(r.area) + '</td><td ' + TD + '>' + esc_(r.activity) + (WT_[r.wt] ? ' <b style="color:#b45309">[' + WT_[r.wt] + ']</b>' : '') + (r.details ? '<br><i style="color:#555555">' + esc_(r.details) + '</i>' : '') + (r.by && String(m.con[c].name || '').indexOf(',') >= 0 ? '<br><span style="font-size:8px;color:#777777">entered by ' + esc_(r.by) + '</span>' : '') + '</td><td ' + TD + '>' + esc_(r.constraint) + (r.controls ? '<br><b>Controls:</b> ' + esc_(r.controls).replace(/\n/g, '<br>') : '') + (r.ed ? '<br><span style="font-size:8px;color:#777777">updated by ' + esc_(r.ed) + '</span>' : '') + '</td></tr>';
+        '<td ' + TD + '>' + esc_(r.area) + '</td><td ' + TD + '>' + esc_(r.activity) + (WT_[r.wt] ? ' <b style="color:#b45309">[' + WT_[r.wt] + ']</b>' : '') + (r.details ? '<br><i style="color:#555555">' + esc_(r.details) + '</i>' : '') + (r.by && String(m.con[c].name || '').indexOf(',') >= 0 ? '<br><span style="font-size:8px;color:#777777">entered by ' + esc_(r.by) + '</span>' : '') + '</td><td ' + TD + '>' + esc_(r.constraint).replace(/\n/g, '<br>') + (r.controls ? '<br><b>Controls:</b> ' + esc_(r.controls).replace(/\n/g, '<br>') : '') + (r.ed ? '<br><span style="font-size:8px;color:#777777">updated by ' + esc_(r.ed) + '</span>' : '') + '</td></tr>';
     });
   });
   h += '</table>';
