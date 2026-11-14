@@ -41,7 +41,7 @@ label{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.08em
 img,canvas,video{max-width:100%}
 input,textarea,select{min-width:0;width:100%;font:inherit;font-size:15px;padding:8px;border:1px solid var(--line);border-radius:4px;background:#fff}
 textarea{min-height:80px;resize:vertical}
-.row textarea{min-height:44px}
+.row textarea{min-height:44px}.row textarea.rd{min-height:120px;line-height:1.4}
 h2{margin:0 0 10px;font-weight:500;font-size:17px;letter-spacing:.12em;color:var(--red)}
 .btn{min-height:42px;font:inherit;border:0;border-radius:4px;padding:10px 16px;cursor:pointer;background:var(--red);color:#fff;letter-spacing:.05em;margin:4px 6px 4px 0;text-decoration:none;display:inline-block}
 .mtg{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;box-sizing:border-box;text-align:left;margin:4px 0;font-weight:600;color:var(--ink)}
@@ -102,7 +102,7 @@ canvas.pad{width:100%;height:clamp(90px,18vh,170px);border:1px dashed var(--grey
 <div id="peek"><img alt=""></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
-const VERSION='5.26.0';document.getElementById('verlbl').textContent='v'+VERSION;
+const VERSION='5.27.0';document.getElementById('verlbl').textContent='v'+VERSION;
 const API_URL='https://script.google.com/macros/s/AKfycbz9C-pbRRJ0Rf1EseelBe1IGp0FkydwoIZ0e1xoBgC_Wkxl7C7dkOhFh3c9v2EczQCMCA/exec';
 const CODES=['KKS','WEN','GSB','PBS','ECO','EOO','OT1','OT2'];
 const ROLES=[...CODES,'ack','noted'];
@@ -243,7 +243,7 @@ function ctlMount(host,text,ctx,otherCls){   // ctx() -> {act,wt,cons}
 const isAdm=()=>ECTX?!!(ECTX.auth&&ECTX.auth.ht):role==='host';
 const ctlRead=d=>{const x=d.querySelector('.ctlh');return x?x._get():d.querySelector('.ectl').value.trim()};
 
-document.addEventListener('input',e=>{if(e.target.closest&&e.target.closest('#oth,.ed'))EDITING=true});   // typing in the Others / constraint editors blocks the 30 s auto-refresh so nothing disappears
+document.addEventListener('input',e=>{if(e.target.closest&&e.target.closest('#oth,.ed'))EDITING=true;const g=e.target;if(g.classList&&g.classList.contains('rd')){g.style.height='auto';g.style.height=Math.min(g.scrollHeight+4,480)+'px'}});   // the More details box grows while typing   // typing in the Others / constraint editors blocks the 30 s auto-refresh so nothing disappears
 function canEditCons(){if(ECTX)return M.v===2&&(M.status==='open'||M.status==='discussion');return M.v===2&&(M.status==='open'||M.status==='discussion')&&(role==='host'||(CTL.includes(CC)&&role==='con'))}
 function consMulti(cur,cls,open){const it=String(cur||'').split('\n').map(x=>x.trim()).filter(Boolean),sel=it.filter(x=>CONS.includes(x)),oth=it.filter(x=>!CONS.includes(x)).join('\n');
   return `<div class="${cls} cm"><details ${open?'open':''}><summary class="cmsum"><b>${t('constraint')}</b> <span class="mut cmn">${sel.length?sel.length+' ✓':t('tapchoose')}</span></summary>${CONS.map(c=>`<label class="cvl"><input type="checkbox" data-kc value="${esc(c)}" ${sel.includes(c)?'checked':''}> ${esc(c)}</label>`).join('')}</details><textarea class="cmo" rows="2" placeholder="${t('constraint')} (${t('other')})">${esc(oth)}</textarea></div>`}
@@ -675,7 +675,7 @@ function partyView(){
       d.innerHTML=`<div class="ar"><select class="ra"><option value="">${t('area')}…</option>${L.map(a=>`<option value="${esc(a)}" ${!isOther&&cur.toUpperCase()===a?'selected':''}>${esc(a)}</option>`).join('')}<option value="__other" ${isOther?'selected':''}>${t('other')}</option></select><input class="ro" placeholder="${t('area')}" value="${isOther?esc(cur):''}" style="margin-top:4px;${isOther?'':'display:none'}"></div>
       <div class="ar"><select class="rb"><option value="">${t('activity')}…</option>${Object.keys(ACTS).map(g=>`<optgroup label="${esc(g)}">${ACTS[g].map(a=>`<option value="${esc(a)}" ${!aOther&&ca===a?'selected':''}>${esc(a)}</option>`).join('')}</optgroup>`).join('')}<option value="__other" ${aOther?'selected':''}>${t('other')}</option></select><input class="rbo" placeholder="${t('activity')}" value="${aOther?esc(ca):''}" style="margin-top:4px;${aOther?'':'display:none'}"></div>
       <div class="ar" style="grid-column:1/-1"><select class="rw"><option value="">${t('wt0')}</option>${['ext','night','simops'].map(k=>`<option value="${k}" ${r.wt===k?'selected':''}>${t('wt_'+k)}</option>`).join('')}</select></div>
-      <textarea class="rd" rows="2" placeholder="${t('details')}">${esc(r.details||'')}</textarea><div class="ar" style="grid-column:1/-1">${consMulti(r.constraint||'','rkm',false)}</div><button class="x">×</button>
+      <textarea class="rd" rows="5" placeholder="${t('details')}">${esc(r.details||'')}</textarea><div class="ar" style="grid-column:1/-1">${consMulti(r.constraint||'','rkm',false)}</div><button class="x">×</button>
       <div class="pw" style="grid-column:1/-1"><button type="button" class="btn sec reg">${t('regfix')}</button><div class="pres"></div></div>`;
       d.querySelector('.reg').onclick=()=>regFix([...d.querySelectorAll('.rd,.cmo,.rbo,.ro')],d.querySelector('.pres'));
       bindCm(d.querySelector('.rkm'));[['.ra','.ro'],['.rb','.rbo']].forEach(([a,b])=>{const sel=d.querySelector(a),oth=d.querySelector(b);sel.onchange=()=>{oth.style.display=sel.value==='__other'?'':'none';dirty=true}});
