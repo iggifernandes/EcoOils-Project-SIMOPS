@@ -1,4 +1,4 @@
-// VERSION: 5.22.0 - Contractors can propose controls (Admin agrees them); Admin control history per activity (ctlHistory); Possible clashes are shown grouped by the specific area (also on the PDF); Several constraints can be chosen per activity; Controls allow up to 3000 characters (Admin ready-made control lists); Edit, delete and merge duplicate names in Attendance; One-tap Present / Absent for every listed person; Each activity can be marked Extended hours, Night shift or SIMOPS; Admin, EcoOils Rep and EcoOils HSSE can delete duplicate entries until signing starts; Several people of one contractor can each enter their own activities (saving replaces only your own rows); EcoOils Rep and EcoOils HSSE sign with the sign-off code and a typed name (no drawn signature); typed name shown as the signature on the PDF; Others present; editable constraints and controls; signed PDF with logo, photo on page 2
+// VERSION: 5.23.0 - Signing is blocked until every activity has a constraint and at least 3 agreed controls; Contractors can propose controls (Admin agrees them); Admin control history per activity (ctlHistory); Possible clashes are shown grouped by the specific area (also on the PDF); Several constraints can be chosen per activity; Controls allow up to 3000 characters (Admin ready-made control lists); Edit, delete and merge duplicate names in Attendance; One-tap Present / Absent for every listed person; Each activity can be marked Extended hours, Night shift or SIMOPS; Admin, EcoOils Rep and EcoOils HSSE can delete duplicate entries until signing starts; Several people of one contractor can each enter their own activities (saving replaces only your own rows); EcoOils Rep and EcoOils HSSE sign with the sign-off code and a typed name (no drawn signature); typed name shown as the signature on the PDF; Others present; editable constraints and controls; signed PDF with logo, photo on page 2
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > Project Settings > Script properties > add HOST_EMAILS = the HSSE host email(s) >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -619,6 +619,15 @@ function handle_(b) {
     }
     if (b.to === 'signing') {
       if (!(m.photos || []).length) return { ok: false, error: 'a meeting photo is required before signing' };
+      if (m.v === 2) {   // every activity needs a constraint and at least 3 controls the Admin agreed
+        const gaps = [];
+        m.parts.forEach(function (c) { m.con[c].rows.forEach(function (r, i) {
+          const n = {}; String(r.controls || '').split('\n').forEach(function (l) { l = l.trim(); if (l) n[l] = 1; });
+          if (!String(r.constraint || '').trim()) gaps.push(c + ' row ' + (i + 1) + ': no constraint');
+          else if (Object.keys(n).length < 3) gaps.push(c + ' row ' + (i + 1) + ': ' + Object.keys(n).length + '/3 agreed controls');
+        }); });
+        if (gaps.length) return { ok: false, error: 'every activity needs a constraint and at least 3 agreed controls: ' + gaps.slice(0, 8).join('; ') + (gaps.length > 8 ? ' ...' : '') };
+      }
       const miss = required_(m).filter(function (r) { return CTL.indexOf(r) < 0 && !okEmails_(emailOf_(m, r)); });   // EcoOils Rep / HSSE sign with their code: no email needed
       if (miss.length) return { ok: false, error: 'email missing for: ' + miss.map(function (r) { return NAMES[r]; }).join(', ') };
       m.H = contentHash_(m); m.frozenAt = new Date().toISOString();
