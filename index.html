@@ -71,6 +71,11 @@ canvas.pad{width:100%;height:clamp(90px,18vh,170px);border:1px dashed var(--grey
 .sigimg{height:50px;display:block}
 .link{font-size:12px;word-break:break-all;color:var(--grey)}
 .lk{padding:8px 0;border-bottom:1px solid var(--line)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}.chip{display:inline-flex;align-items:stretch;border:1px solid var(--line);border-radius:6px;background:#fff;overflow:hidden}
+.chip a{display:inline-flex;align-items:center;gap:7px;padding:8px 12px;font-weight:600;color:var(--ink);text-decoration:none}.chip a:hover{background:#f3f4f6}
+.chip .dot{width:9px;height:9px;border-radius:50%;background:#e8a317;flex:none}.chip .dot.ok{background:#4caf50}
+.chip .chipx{border:0;border-left:1px solid var(--line);background:#fff;color:#777;padding:0 10px;font-size:16px;cursor:pointer}.chip .chipx:hover{background:#fdecea;color:#b00020}
+.chip .pdfl{font-size:11px;padding:0 8px;border-left:1px solid var(--line);color:var(--ink);display:inline-flex;align-items:center;text-decoration:none}
 .drop{border:2px dashed var(--line);padding:14px;text-align:center;color:var(--grey);border-radius:6px}
 .drop.over{border-color:var(--red)}
 .thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.thumbs img{height:80px;border-radius:4px;cursor:pointer}
@@ -102,7 +107,7 @@ canvas.pad{width:100%;height:clamp(90px,18vh,170px);border:1px dashed var(--grey
 <div id="peek"><img alt=""></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
-const VERSION='5.30.0';document.getElementById('verlbl').textContent='v'+VERSION;
+const VERSION='5.31.0';document.getElementById('verlbl').textContent='v'+VERSION;
 const API_URL='https://script.google.com/macros/s/AKfycbz9C-pbRRJ0Rf1EseelBe1IGp0FkydwoIZ0e1xoBgC_Wkxl7C7dkOhFh3c9v2EczQCMCA/exec';
 const CODES=['KKS','WEN','GSB','PBS','ECO','EOO','OT1','OT2'];
 const ROLES=[...CODES,'ack','noted'];
@@ -463,6 +468,8 @@ function bindSign(){
 function unlockCard(){return `<div class="card"><h2>${t('unl')}</h2><div class="mut" style="margin-bottom:8px">${t('unlnote')}</div><label>${t('rolelbl')}</label><select id="u_role">${CTL.map(r=>`<option value="${r}">${esc(ctlName(r))}</option>`).join('')}</select><label style="margin-top:8px">${t('ccode')}</label><input id="u_code" type="password" inputmode="numeric" maxlength="8" autocomplete="off"><button class="btn" id="u_go">${t('clogin')}</button></div>`}
 function bindUnlock(){const g=$('#u_go');if(!g)return;g.onclick=async()=>{const role=$('#u_role').value,r=await post({action:'roleLogin',role,pin:$('#u_code').value});if(!r.ok)return msg(r.error||t('err'));
   try{localStorage.simopsCS=r.session;localStorage.simopsCR=r.role}catch(e){}location.href=`${BASE}?m=${MID}&c=${role}`}}
+const chipTip=x=>[x.time||'',t('s_'+x.status),x.parties||''].filter(Boolean).join(' · ');
+const chip=(x,href,del,pdf)=>`<span class="chip"><a href="${href}" title="${esc(chipTip(x))}"><i class="dot ${x.status==='done'?'ok':''}"></i>${esc(String(x.date).slice(0,10))}</a>${pdf&&x.status==='done'&&x.pdf?`<a class="pdfl" target="_blank" rel="noopener" href="${esc(x.pdf)}">PDF</a>`:''}${del?`<button class="chipx" data-del="${x.id}" data-st="${x.status}" title="${t('del')}" aria-label="${t('del')}">×</button>`:''}</span>`;
 function bindDel(){document.querySelectorAll('[data-del]').forEach(x=>{if(x.dataset.b)return;x.dataset.b=1;x.onclick=async()=>{
   if(!confirm(x.dataset.st==='done'?t('delq2'):t('delq')))return;
   const r=await post({action:'delete',session:localStorage.simopsSess,id:x.dataset.del});
@@ -525,7 +532,7 @@ async function home(){
   if(cs){
     $('#csout').onclick=()=>{csClear();home()};
     post({action:'myMeetings',s:cs}).then(r=>{const b=$('#mym');if(!r.ok){csClear();return home()}
-      b.innerHTML=r.items.length?r.items.map(x=>`<div class="lk"><a class="btn sec mtg" href="${BASE}?m=${x.id}&c=${cr}">${esc(String(x.date).slice(0,10))} ${esc(x.time||'')} <span class="tag ${x.status==='done'?'ok':''}">${t('s_'+x.status)}</span></a></div>`).join(''):t('nomtg')});
+      b.innerHTML=r.items.length?'<div class="chips">'+r.items.map(x=>chip(x,`${BASE}?m=${x.id}&c=${cr}`,false,false)).join('')+'</div>':t('nomtg')});
   }else{
     const openCo=async c=>{try{localStorage.simopsCR=c}catch(e){}try{const r=await(CUR&&CUR.c===c?CUR.p:get({action:'current',full:1,c}));if(!r.ok||!r.id)return msg(t('nocur'));try{if(r.meeting&&r.role!=='host')localStorage.setItem('simopsM:'+r.id+':'+c,JSON.stringify({meeting:r.meeting,role:r.role}));localStorage.simopsLast=r.id}catch(e){}location.href=`${BASE}?m=${r.id}&c=${c}`}catch(e){msg(t('neterr'))}};
     const pre=c=>{if(CODES.includes(c))CUR={c,p:get({action:'current',full:1,c}).catch(()=>({ok:false}))}};
@@ -540,7 +547,7 @@ async function home(){
     $('#mk').onclick=async()=>{const r=await post({action:'create',session:sess,base:BASE,host:$('#h_host').value,date:$('#h_date').value,time:$('#h_time').value,hostEmails:$('#h_em').value,areas:[]});
       if(!r.ok){if(r.error==='session'){localStorage.removeItem('simopsSess');msg(t('nosess'));return home()}return msg(r.error||t('err'))}
       location.href=`${BASE}?m=${r.id}&ht=${r.ht}`};
-    post({action:'mine',session:sess}).then(r=>{if(r.ok&&r.items.length){$('#mine').innerHTML=`<div class="card"><h2>${t('mine')}</h2>${r.items.map(x=>`<div class="lk"><a class="btn sec mtg" href="${BASE}?m=${x.id}&ht=${x.ht}">${esc(x.date)} ${esc(x.time||'')} <span class="tag ${x.status==='done'?'ok':''}">${t('s_'+x.status)}</span></a>${x.status==='done'&&x.pdf?` <a class="btn" target="_blank" rel="noopener" href="${esc(x.pdf)}">PDF</a>`:''} <button class="btn sec" data-del="${x.id}" data-st="${x.status}">${t('del')}</button></div>`).join('')}</div>`;bindDel()}});
+    post({action:'mine',session:sess}).then(r=>{if(r.ok&&r.items.length){$('#mine').innerHTML=`<div class="card"><h2>${t('mine')}</h2><div class="chips">${r.items.map(x=>chip(x,`${BASE}?m=${x.id}&ht=${x.ht}`,true,true)).join('')}</div></div>`;bindDel()}});
     $('#a_send').onclick=async()=>{const r=await post({action:'hostPinOtp',email:semail});if(!r.ok)return msg(r.error||t('err'));$('#a1').style.display='none';$('#a2').style.display='block';msg(t('codesent')+' '+semail)};
     $('#a_go').onclick=async()=>{const r=await post({action:'hostPinSet',email:semail,code:$('#a_code').value,pin:$('#a_new').value});if(!r.ok)return msg(r.error||t('err'));msg(t('pinok'));$('#a1').style.display='block';$('#a2').style.display='none';$('#a_code').value='';$('#a_new').value=''};
     try{new QRCode($('#qr'),{text:BASE,width:180,height:180})}catch(e){}
@@ -558,7 +565,7 @@ async function home(){
     $('#l_go').onclick=async()=>{const r=await post({action:'hostPinSet',email:lem(),code:$('#l_code').value,pin:$('#l_new').value});if(!r.ok)return msg(r.error||t('err'));msg(t('pinok'));$('#l1').style.display='block';$('#l2').style.display='none'};
   }
   get({action:'list'}).then(r=>{const b=$('#reg');if(!r.ok||!r.items.length){b.textContent=t('noreg');return}
-    b.innerHTML=r.items.map(x=>`<div class="lk"><a class="btn sec mtg" href="${BASE}?m=${x.id}">${esc(String(x.date).slice(0,10))} ${esc(x.time||'')} <span class="tag ${x.status==='done'?'ok':''}">${t('s_'+x.status)}</span></a>${sess?` <button class="btn sec" data-del="${x.id}" data-st="${x.status}">${t('del')}</button>`:''}<div class="mut">${esc(x.parties||'')}</div></div>`).join('');if(sess)bindDel()});
+    b.innerHTML='<div class="chips">'+r.items.map(x=>chip(x,`${BASE}?m=${x.id}`,!!sess,false)).join('')+'</div>';if(sess)bindDel()});
 }
 
 /* ---------- HOST ---------- */
