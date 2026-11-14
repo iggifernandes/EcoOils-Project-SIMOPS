@@ -1,4 +1,4 @@
-// VERSION: 5.21.0 - Possible clashes are shown grouped by the specific area (also on the PDF); Several constraints can be chosen per activity; Controls allow up to 3000 characters (Admin ready-made control lists); Edit, delete and merge duplicate names in Attendance; One-tap Present / Absent for every listed person; Each activity can be marked Extended hours, Night shift or SIMOPS; Admin, EcoOils Rep and EcoOils HSSE can delete duplicate entries until signing starts; Several people of one contractor can each enter their own activities (saving replaces only your own rows); EcoOils Rep and EcoOils HSSE sign with the sign-off code and a typed name (no drawn signature); typed name shown as the signature on the PDF; Others present; editable constraints and controls; signed PDF with logo, photo on page 2
+// VERSION: 5.22.0 - Contractors can propose controls (Admin agrees them); Admin control history per activity (ctlHistory); Possible clashes are shown grouped by the specific area (also on the PDF); Several constraints can be chosen per activity; Controls allow up to 3000 characters (Admin ready-made control lists); Edit, delete and merge duplicate names in Attendance; One-tap Present / Absent for every listed person; Each activity can be marked Extended hours, Night shift or SIMOPS; Admin, EcoOils Rep and EcoOils HSSE can delete duplicate entries until signing starts; Several people of one contractor can each enter their own activities (saving replaces only your own rows); EcoOils Rep and EcoOils HSSE sign with the sign-off code and a typed name (no drawn signature); typed name shown as the signature on the PDF; Others present; editable constraints and controls; signed PDF with logo, photo on page 2
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > Project Settings > Script properties > add HOST_EMAILS = the HSSE host email(s) >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -83,11 +83,17 @@ function openNext_(m) {
 }
 
 const WT_ = { ext: 'Extended hours', night: 'Night shift', simops: 'SIMOPS' };   // work type chosen per activity; none = normal day work
+function pend_(r) {   // controls a contractor proposed that the Admin has not agreed (shown in grey, never as agreed controls)
+  if (!r.cprop) return '';
+  const have = String(r.controls || '').split('\n').map(function (x) { return x.trim(); });
+  const p = String(r.cprop).split('\n').map(function (x) { return x.trim(); }).filter(function (x) { return x && have.indexOf(x) < 0; });
+  return p.length ? '<br><span style="font-size:8px;color:#777777"><i>Proposed by contractor, not agreed:</i> ' + p.map(esc_).join('; ') + '</span>' : '';
+}
 function content_(m) {
   const con = {};
   CODES.forEach(function (c) {
     const e = m.con[c];
-    if (e && m.parts.indexOf(c) >= 0) con[c] = { name: e.name, rows: e.rows.map(function (r) { var o = { area: r.area, activity: r.activity, details: r.details || '', constraint: r.constraint }; if (r.controls) o.controls = r.controls; if (r.by) o.by = r.by; if (WT_[r.wt]) o.wt = r.wt; return o; }) };
+    if (e && m.parts.indexOf(c) >= 0) con[c] = { name: e.name, rows: e.rows.map(function (r) { var o = { area: r.area, activity: r.activity, details: r.details || '', constraint: r.constraint }; if (r.controls) o.controls = r.controls; if (r.cprop) o.cprop = r.cprop; if (r.by) o.by = r.by; if (WT_[r.wt]) o.wt = r.wt; return o; }) };
   });
   const out = { id: m.id, host: m.host, date: m.date, time: m.time, parts: m.parts, con: con, hostc: m.hostc || '', photos: (m.photos || []).map(sha_) };
   const att = {};
@@ -408,6 +414,21 @@ function handle_(b) {
   if (!m) return { ok: false, error: 'not found' };
   const isHost = !!(b.ht && b.ht === m.ht);
   if (b.action === 'get') return view_(m, b);
+  if (b.action === 'ctlHistory') {   // Admin only: the controls used in this Admin's earlier meetings, counted per activity, so the app can suggest what was used before
+    if (!isHost) return { ok: false, error: 'invalid sign-in' };
+    const sh = sheet_(), last = sh.getLastRow(), cnt = {};
+    const rws = last > 1 ? sh.getRange(2, 1, last - 1, 11).getValues() : [];
+    rws.filter(function (r) { return r[9] === m.owner; }).reverse().slice(0, 25).forEach(function (r) {
+      let mm = null; try { mm = load_(r[0]); } catch (err) { mm = null; }
+      if (!mm || !mm.con) return;
+      CODES.forEach(function (c) { ((mm.con[c] && mm.con[c].rows) || []).forEach(function (row) {
+        const act = String(row.activity || '').trim(); if (!act || !row.controls) return;
+        String(row.controls).split('\n').forEach(function (l) { l = l.trim(); if (!l || l.length > 300) return; const k = act + '\u0001' + l; cnt[k] = (cnt[k] || 0) + 1; });
+      }); });
+    });
+    const h = Object.keys(cnt).map(function (k) { const p = k.split('\u0001'); return { a: p[0], l: p[1], n: cnt[k] }; }).sort(function (x, y) { return y.n - x.n; }).slice(0, 600);
+    return { ok: true, h: h };
+  }
   if (b.action === 'pdfData') {   // the signed PDF as data, so the phone can attach it straight into WhatsApp (the record is public anyway)
     if (m.status !== 'done') return { ok: false, error: 'not signed yet' };
     let blob;
@@ -473,6 +494,7 @@ function handle_(b) {
     const mine = (Array.isArray(b.rows) ? b.rows : []).slice(0, 60).map(function (r) {
       const o = { area: String(r.area || '').slice(0, 100), activity: String(r.activity || '').slice(0, 200), details: String(r.details || '').slice(0, 1000), constraint: String(r.constraint || '').slice(0, 1500), by: nm };
       if (r.controls) o.controls = String(r.controls).slice(0, 3000);
+      if (r.cprop) o.cprop = String(r.cprop).slice(0, 3000);   // controls the contractor proposes; only the Admin agrees them (moves them into controls)
       if (WT_[r.wt]) o.wt = r.wt;
       if (r.ed) o.ed = String(r.ed).slice(0, 40);
       return o;
@@ -678,7 +700,7 @@ function pdfHtml_(m) {
     const rows = (m.con[c] && m.con[c].rows) || []; if (!rows.length) return;
     rows.forEach(function (r, i) {
       h += '<tr>' + (i === 0 ? '<td ' + TD + ' rowspan="' + rows.length + '"><b>' + esc_(NAMES[c]) + '</b>' + (m.con[c].name ? '<br><span style="font-size:8px;color:#777777">entered by ' + esc_(m.con[c].name) + '</span>' : '') + '</td>' : '') +
-        '<td ' + TD + '>' + esc_(r.area) + '</td><td ' + TD + '>' + esc_(r.activity) + (WT_[r.wt] ? ' <b style="color:#b45309">[' + WT_[r.wt] + ']</b>' : '') + (r.details ? '<br><i style="color:#555555">' + esc_(r.details) + '</i>' : '') + (r.by && String(m.con[c].name || '').indexOf(',') >= 0 ? '<br><span style="font-size:8px;color:#777777">entered by ' + esc_(r.by) + '</span>' : '') + '</td><td ' + TD + '>' + esc_(r.constraint).replace(/\n/g, '<br>') + (r.controls ? '<br><b>Controls:</b> ' + esc_(r.controls).replace(/\n/g, '<br>') : '') + (r.ed ? '<br><span style="font-size:8px;color:#777777">updated by ' + esc_(r.ed) + '</span>' : '') + '</td></tr>';
+        '<td ' + TD + '>' + esc_(r.area) + '</td><td ' + TD + '>' + esc_(r.activity) + (WT_[r.wt] ? ' <b style="color:#b45309">[' + WT_[r.wt] + ']</b>' : '') + (r.details ? '<br><i style="color:#555555">' + esc_(r.details) + '</i>' : '') + (r.by && String(m.con[c].name || '').indexOf(',') >= 0 ? '<br><span style="font-size:8px;color:#777777">entered by ' + esc_(r.by) + '</span>' : '') + '</td><td ' + TD + '>' + esc_(r.constraint).replace(/\n/g, '<br>') + (r.controls ? '<br><b>Controls:</b> ' + esc_(r.controls).replace(/\n/g, '<br>') : '') + pend_(r) + (r.ed ? '<br><span style="font-size:8px;color:#777777">updated by ' + esc_(r.ed) + '</span>' : '') + '</td></tr>';
     });
   });
   h += '</table>';
