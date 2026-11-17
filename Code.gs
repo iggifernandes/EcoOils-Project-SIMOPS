@@ -1,4 +1,4 @@
-// VERSION: 5.23.0 - Signing is blocked until every activity has a constraint and at least 3 agreed controls; Contractors can propose controls (Admin agrees them); Admin control history per activity (ctlHistory); Possible clashes are shown grouped by the specific area (also on the PDF); Several constraints can be chosen per activity; Controls allow up to 3000 characters (Admin ready-made control lists); Edit, delete and merge duplicate names in Attendance; One-tap Present / Absent for every listed person; Each activity can be marked Extended hours, Night shift or SIMOPS; Admin, EcoOils Rep and EcoOils HSSE can delete duplicate entries until signing starts; Several people of one contractor can each enter their own activities (saving replaces only your own rows); EcoOils Rep and EcoOils HSSE sign with the sign-off code and a typed name (no drawn signature); typed name shown as the signature on the PDF; Others present; editable constraints and controls; signed PDF with logo, photo on page 2
+// VERSION: 5.24.0 - Admin can proceed to signing with no meeting photo; Signing is blocked until every activity has a constraint and at least 3 agreed controls; Contractors can propose controls (Admin agrees them); Admin control history per activity (ctlHistory); Possible clashes are shown grouped by the specific area (also on the PDF); Several constraints can be chosen per activity; Controls allow up to 3000 characters (Admin ready-made control lists); Edit, delete and merge duplicate names in Attendance; One-tap Present / Absent for every listed person; Each activity can be marked Extended hours, Night shift or SIMOPS; Admin, EcoOils Rep and EcoOils HSSE can delete duplicate entries until signing starts; Several people of one contractor can each enter their own activities (saving replaces only your own rows); EcoOils Rep and EcoOils HSSE sign with the sign-off code and a typed name (no drawn signature); typed name shown as the signature on the PDF; Others present; editable constraints and controls; signed PDF with logo, photo on page 2
 // Setup: Google Sheet > Extensions > Apps Script > paste this file > Project Settings > Script properties > add HOST_EMAILS = the HSSE host email(s) >
 // Deploy > Web app (Execute as: Me, Access: Anyone). First run asks for Drive, Sheets and Mail permissions.
 // Cost: free (about 100 emails/day on a Gmail account; each signature or host login uses one email).
@@ -618,7 +618,10 @@ function handle_(b) {
       if (!m.parts.length) return { ok: false, error: 'no entries yet' };
     }
     if (b.to === 'signing') {
-      if (!(m.photos || []).length) return { ok: false, error: 'a meeting photo is required before signing' };
+      if (b.nophoto && isHost && !(m.photos || []).length && !m.nophoto) {   // Admin confirms there is no photo for this meeting
+        m.nophoto = true; m.log = (m.log || []).concat([{ at: new Date().toISOString(), c: 'status', by: 'Admin confirmed no meeting photo' }]).slice(-40);
+      }
+      if (!(m.photos || []).length && !m.nophoto) return { ok: false, error: 'a meeting photo is required before signing (Admin can proceed with no photo)' };
       if (m.v === 2) {   // every activity needs a constraint and at least 3 controls the Admin agreed
         const gaps = [];
         m.parts.forEach(function (c) { m.con[c].rows.forEach(function (r, i) {
@@ -741,6 +744,7 @@ function pdfHtml_(m) {
     h += '<div style="page-break-before:always"></div>' + H3('Annex', 'MEETING PHOTO (SUPPORTING PROOF)');
     m.photos.forEach(function (p) { h += '<p style="margin:4px 0"><img src="' + p + '" width="460" style="border:1px solid ' + LN + '"></p>'; });
   }
+  else if (m.nophoto) h += '<p style="font-size:9px;color:#777777;margin-top:8px">No meeting photo was taken. Confirmed by the Admin before signing.</p>';
   h += '</body></html>';
   return h;
 }
